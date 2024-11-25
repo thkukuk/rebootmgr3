@@ -1,0 +1,122 @@
+rebootmgr NEWS -- history of user-visible changes.
+
+Copyright (C) 2016-2024 Thorsten Kukuk
+
+Version 3.0
+* Rewrite of the interface
+  * Use sd-varlink instead of dbus
+  * Remove "fast" option, was meanwhile identical to "now"
+  * Configuration is now stored in /etc/rebootmgr/rebootmgr.conf
+  * Configuration Files Specification from UAPI group is followed
+  * Move rebootmgrd to /usr/libexec
+
+Version 2.6
+* Switch to meson as build environment
+* Move rebootmgrctl to /usr/bin
+
+Version 2.5
+* tmpfiles.d/soft-reboot-cleanup.conf got moved to aaa_base
+
+Version 2.4
+* Make sure systemctl reboot will not switch to soft-reboot automatically
+
+Version 2.3
+* Add verbose option to rebootmgrd
+* Enable verbose option for rebootmgrd in service file
+
+Version 2.2
+* Add tmpfiles.d config to remove /run/reboot-needed after soft-reboot
+
+Version 2.1
+* Support systemctl soft-reboot (systemd >= v254)
+
+Version 2.0
+* Remove outdated etcd support
+* Don't reboot always at the start of the maintenance window (#10)
+
+Version 1.3.1
+* Install dbus config below /usr/share/dbus-1, not /etc/dbus-1
+
+Version 1.3
+* Fix documentation of is-active return  value [bsc#1173484]
+* Fix crash if rebootmgrd is already running
+* Fix systemctl restart
+
+Version 1.2
+* rebootmgr depends on dbus and not the network
+
+Version 1.1
+* Handle systemd and tmpfiles.d directory correctly
+
+Version 1.0
+* Rewrite rebootmgrd to use timer_* functions instead of glib
+* Only libeconf is supported for configuration file management
+
+Version 0.20.1
+* Added a memory allocation check
+
+Version 0.20
+* Implement writing of config options back with libeconf
+
+Version 0.19
+* Use libeconf to read rebootmgr.conf, writing currently not supported
+
+Version 0.18
+* Allow compiling without etcd support
+
+Version 0.17
+* Fix fast reboot with etcd lock [issues/4]
+* Release etcd lock if reboot got canceled
+
+Version 0.16
+* Remove -Werror
+* Use unsigned integers for json-c loops
+
+Version 0.15
+* Adjust for systemd >= 230
+
+Version 0.14
+* Allow to have no maintenance window configured [bsc#1031619]
+
+Version 0.13
+* Cancel reboot if we run out of the maintenance window with etcd-lock
+  [bsc#1028060]
+
+Version 0.12
+* Rewrote reboot code to not block dbus if we wait for etcd locks [bsc#1026298]
+* Fix rebootmgr.service dependencies
+* Check input for maintenance window for correct syntax before sending
+  to the daemon [bsc#1026220]
+
+Version 0.11
+* Fix several bugs in etcd locking/unlocking
+
+Version 0.10
+* Fix typos in documentation
+* Fix compilation on 32bit systems
+
+Version 0.9
+* Finish manual page for rebootmgrctl
+
+Version 0.8
+* Implement changing number of hosts holding a lock at the same time
+* Add new and enhance existing manual pages
+
+Version 0.7
+* Fix systemd service file
+
+Version 0.6
+* Implement locking via etcd
+
+Version 0.5
+* Rewrite for correct dbus support
+
+Version 0.3
+* Bugfix release
+
+Version 0.2
+* Implement maintenance window for reboot
+* Implement get-strategy for rebootmgrctl
+
+Version 0.1
+* Initial release

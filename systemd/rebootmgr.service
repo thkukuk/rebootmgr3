@@ -1,0 +1,13 @@
+[Unit]
+Description=Reboot Manager
+Documentation=man:rebootmgrd(8) man:rebootmgrctl(1) man:rebootmgr.conf(5)
+After=local-fs.target
+
+[Service]
+Type=Notify
+ExecStart=/usr/libexec/rebootmgrd --verbose
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

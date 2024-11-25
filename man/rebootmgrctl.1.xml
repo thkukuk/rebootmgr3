@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+"http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd">
+
+<!--  \-*\- nroff \-*\- -->
+<!--  Copyright 2017, 2020, 2023, 2024 Thorsten Kukuk &lt;kukuk@suse.de&gt; -->
+
+<!--  This file is part of rebootmgr. -->
+
+<!--  rebootmgr is free software; you can redistribute it and/or -->
+<!--  modify it under the terms of the GNU General Public License as -->
+<!--  published by the Free Software Foundation in version 2 of the -->
+<!--  License. -->
+
+<!--  rebootmgr is distributed in the hope that it will be useful, -->
+<!--  but WITHOUT ANY WARRANTY; without even the implied warranty of -->
+<!--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU -->
+<!--  General Public License for more details. -->
+
+<!--  You should have received a copy of the GNU General Public License -->
+<!-- along with rebootmgr; If not, see <http://www.gnu.org/licenses/>.  -->
+
+<refentry id='rebootmgrctl.1'>
+  <refentryinfo>
+    <title>rebootmgrctl</title>
+    <productname>rebootmgr</productname>
+
+    <authorgroup>
+      <author>
+        <contrib></contrib>
+        <firstname>Thorsten</firstname>
+        <surname>Kukuk</surname>
+        <email>kukuk@suse.de</email>
+      </author>
+    </authorgroup>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>rebootmgrctl</refentrytitle>
+    <manvolnum>1</manvolnum>
+    <refmiscinfo class='setdesc'>rebootmgr</refmiscinfo>
+  </refmeta>
+
+  <refnamediv id='name'>
+    <refname>rebootmgrctl</refname>
+    <refpurpose>Tool to control and configure the reboot manager daemon.</refpurpose>
+  </refnamediv>
+
+<!-- body begins here -->
+  <refsynopsisdiv id='synopsis'>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <group choice='opt'>
+      <arg choice='plain'>--help</arg>
+      <arg choice='plain'>--version</arg>
+      </group>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>is-active</arg>
+      <arg choice='opt'>--quiet</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>reboot</arg>
+      <group choice='opt'>
+	<arg choice='plain'>now</arg>
+      </group>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>soft-reboot</arg>
+      <group choice='opt'>
+	<arg choice='plain'>now</arg>
+      </group>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>cancel</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>status</arg>
+      <arg choice='opt'>--full</arg>
+      <arg choice='opt'>--quiet</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+	<arg choice='plain'>set-strategy</arg>
+      <group choice='plain'>
+	<arg choice='plain'>best-effort</arg>
+	<arg choice='plain'>maint-window</arg>
+	<arg choice='plain'>instantly</arg>
+	<arg choice='plain'>off</arg>
+      </group>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>get-strategy</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>set-window</arg>
+      <arg choice='plain'><replaceable>time</replaceable></arg>
+      <arg choice='plain'><replaceable>duration</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>rebootmgrctl</command>
+      <arg choice='plain'>get-window</arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1 id='description'><title>Description</title>
+  <para><emphasis remap='B'>rebootmgrctl</emphasis> is used to
+  query and configure the
+  <citerefentry><refentrytitle>rebootmgrd</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+  process.</para>
+  </refsect1>
+
+  <refsect1 id='options'><title>Options</title>
+  <variablelist remap='TP'>
+    <varlistentry>
+      <term><option>--help</option></term>
+      <listitem>
+	<para>display help text and exit</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--version</option></term>
+      <listitem>
+	<para>output version information and exit</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>cancel</option></term>
+      <listitem>
+	<para>Cancels an already running reboot.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>is-active</option> <optional>--quiet</optional></term>
+      <listitem>
+	<para>Prints if the rebootmgrd is running and active or not. With the
+	<optional>--quiet</optional> option,
+	<command>rebootmgrctl</command> does not print any output, but returns
+	<literal>0</literal> if <command>rebootmgrd</command> is running or
+	<literal>1</literal> if not.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>reboot</option> <optional>fast|now</optional></term>
+      <listitem>
+	<para>
+	  Tells rebootmgrd to schedule a reboot. With
+	  the <optional>now</optional> option, a forced reboot is done
+	  and a maintenance window is ignored.
+	  If there is already a reboot or soft-reboot scheduled, this
+	  request is ignored.
+	</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>soft-reboot</option> <optional>fast|now</optional></term>
+      <listitem>
+	<para>
+	  Tells rebootmgrd to schedule a soft-reboot (see
+	  <citerefentry project='systemd'><refentrytitle>systemd-soft-reboot.service</refentrytitle><manvolnum>8</manvolnum></citerefentry>).
+	  With the <optional>now</optional> option, a forced soft-reboot is
+	  done and a maintenance window is ignored.
+	  If there is already a reboot or soft-reboot scheduled, this
+	  request is ignored.
+	</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>status</option> <optional>--full|--quiet</optional></term>
+      <listitem>
+	<para>Prints the current status of <command>rebootmgrd</command>.
+	With the <optional>--full</optional> option, not only the current
+	status, but also the configuration values currently in use are printed.
+	With the <optional>--quiet</optional> option,
+	<command>rebootmgrctl</command> does not print any output, but returns
+	the current reboot status as return value. Valid values are:
+	</para>
+	<variablelist>
+	  <varlistentry>
+	    <term>0</term>
+	    <listitem>
+	      <para>
+		No reboot requested
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>1</term>
+	    <listitem>
+	      <para>
+		Reboot requested
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>2</term>
+	    <listitem>
+	      <para>
+		Reboot requested, waiting for maintenance window
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>set-strategy</option> best-effort|maint-window|instantly|off</term>
+      <listitem>
+	<para>
+	  A new strategy to reboot the machine is set and written into
+	  <filename>/etc/rebootmgr/rebootmgr.conf.d/50-rebootmgr.conf</filename>.
+	</para>
+	<variablelist>
+	  <varlistentry>
+	    <term>best-effort</term>
+	    <listitem>
+	      <para>
+		This is the default strategy. If a maintenance window
+		is specified, the strategy will be
+		<option>maint-window</option>. If no maintenance window is
+		specified, the machine is immediately rebooted
+		(<option>instantly</option>).
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>maint-window</term>
+	    <listitem>
+	      <para>
+		Reboot does happen only during a specified maintenance
+		window. If no window is specified, the
+		<option>instantly</option> strategy is followed.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>instantly</term>
+	    <listitem>
+	      <para>
+		Other services will be informed that a reboot will
+		happen. Reboot will be done without waiting for a
+		maintenance window.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>off</term>
+	    <listitem>
+	      <para>
+		Reboot requests are temporary
+		ignored. <filename>rebootmgr.conf</filename> is not
+		modified.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>get-strategy</option></term>
+      <listitem>
+	<para>
+	  The currently used reboot strategy of <command>rebootmgrd</command>
+	  will be printed.
+	</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>set-window</option> <replaceable>time</replaceable>
+      <replaceable>duration</replaceable></term>
+      <listitem>
+	<para>
+	  Set's the maintenance window. The format of <varname>time</varname>
+	  is a calendar event described in <citerefentry
+	  project='systemd'><refentrytitle>systemd.time</refentrytitle><manvolnum>7</manvolnum></citerefentry>.
+	  The format of <varname>duration</varname> is
+          <literal>[XXh][YYm]</literal>.
+	</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>get-window</option></term>
+      <listitem>
+	<para>
+	  The currently set maintenance window will be printed.
+	</para>
+      </listitem>
+    </varlistentry>
+
+  </variablelist>
+  </refsect1>
+
+  <refsect1 id='see_also'>
+    <title>See Also</title>
+    <para>
+      <citerefentry project='systemd'><refentrytitle>systemd.time</refentrytitle><manvolnum>7</manvolnum></citerefentry>,
+      <citerefentry project='systemd'><refentrytitle>systemd-soft-reboot.service</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+    </para>
+  </refsect1>
+</refentry>

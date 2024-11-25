@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+"http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd">
+
+<!--  \-*\- nroff \-*\- -->
+<!--  Copyright 2016, 2017, 2024 Thorsten Kukuk &lt;kukuk@suse.de&gt; -->
+
+<!--  This file is part of rebootmgr. -->
+
+<!--  rebootmgr is free software; you can redistribute it and/or -->
+<!--  modify it under the terms of the GNU General Public License as -->
+<!--  published by the Free Software Foundation in version 2 of the -->
+<!--  License. -->
+
+<!--  rebootmgr is distributed in the hope that it will be useful, -->
+<!--  but WITHOUT ANY WARRANTY; without even the implied warranty of -->
+<!--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU -->
+<!--  General Public License for more details. -->
+
+<!--  You should have received a copy of the GNU General Public License -->
+<!-- along with rebootmgr; If not, see <http://www.gnu.org/licenses/>.  -->
+
+<refentry id='rebootmgrd.8'>
+  <refentryinfo>
+    <title>rebootmgrd</title>
+    <productname>rebootmgr</productname>
+
+    <authorgroup>
+      <author>
+	<contrib></contrib>
+	<firstname>Thorsten</firstname>
+	<surname>Kukuk</surname>
+	<email>kukuk@suse.de</email>
+      </author>
+    </authorgroup>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>rebootmgrd</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo class='setdesc'>rebootmgr</refmiscinfo>
+  </refmeta>
+
+  <refnamediv id='name'>
+    <refname>rebootmgrd</refname>
+    <refname>rebootmgr.service</refname>
+    <refpurpose>Reboot the machine during a maintenance window.</refpurpose>
+  </refnamediv>
+
+<!-- body begins here -->
+  <refsynopsisdiv id='synopsis'>
+    <cmdsynopsis>
+      <command>/usr/libexec/rebootmgrd</command>
+      <group choice='opt'>
+      <arg choice='plain'>--debug</arg>
+      <arg choice='plain'>--verbose</arg>
+      <arg choice='plain'>--help</arg>
+      <arg choice='plain'>--version</arg>
+      </group>
+    </cmdsynopsis>
+    <para><filename>/usr/lib/systemd/system/rebootmgr.service</filename></para>
+  </refsynopsisdiv>
+
+  <refsect1 id='description'>
+    <title>Description</title>
+    <para>To avoid that a whole cluster or a set of machines with the same task
+    reboot at the same there, <emphasis remap='B'>rebootmgrd</emphasis> reboots
+    the machine following configured policies.</para>
+    <refsect2 id='reboot_strategy_options'>
+      <title>Reboot Strategies</title>
+      <para>
+	rebootmgr supports different strategies, when a reboot should be done:
+      </para>
+      <variablelist>
+	<varlistentry><term>instantly</term>
+	<listitem>
+	  <para>
+	    When the signal arrives other services will be informed
+	    that we plan to reboot and do the reboot without waiting
+	    for a maintenance window.
+	  </para>
+	</listitem>
+	</varlistentry>
+	<varlistentry><term>maint-window</term>
+	<listitem>
+	  <para>
+	    Reboot only during a specified maintenance window. If no window is
+	    specified, reboot immediately.
+	  </para>
+	</listitem>
+	</varlistentry>
+	<varlistentry><term>best-effort</term>
+	<listitem>
+	  <para>
+	    This is the default. IF a maintenance window is specified,
+	    use maint-window. If no maintenance window is specified,
+	    reboot immediately (instantly).
+	  </para>
+	</listitem>
+	</varlistentry>
+	<varlistentry><term>off</term>
+	<listitem>
+	  <para>
+	    rebootmgr continues to run, but ignores all signals to
+	    reboot. Setting the strategy to off does not clear the maintenance
+	    window. If rebootmgr is enabled again, it will continue to use the
+	    old specified maintenance window.
+	  </para>
+	</listitem>
+	</varlistentry>
+      </variablelist>
+      <para>
+	The reboot strategy can be configured via
+	<citerefentry><refentrytitle>rebootmgr.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+	and adjusted at runtime via
+	<citerefentry><refentrytitle>rebootmgrctl</refentrytitle><manvolnum>1</manvolnum></citerefentry>.
+	These changes will be written to the configuration file and survive the
+	next reboot.
+      </para>
+    </refsect2>
+  </refsect1>
+
+  <refsect1 id='options'><title>Options</title>
+  <variablelist remap='TP'>
+    <varlistentry>
+      <term><option>--debug</option></term>
+      <listitem>
+	<para>Log additional informations during runtime. A real reboot is not
+	done in debug mode.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--verbose</option></term>
+      <listitem>
+        <para>Log additional informations about requested reboots.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--help</option></term>
+      <listitem>
+	<para>Display help text and exit</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--version</option></term>
+      <listitem>
+	<para>Output version information and exit</para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+  </refsect1>
+
+  <refsect1 id='see_also'>
+    <title>See Also</title>
+    <para>
+      <citerefentry><refentrytitle>rebootmgrctl</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <citerefentry><refentrytitle>rebootmgr.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
+      <citerefentry project='systemd'><refentrytitle>systemd.time</refentrytitle><manvolnum>7</manvolnum></citerefentry>
+    </para>
+  </refsect1>
+</refentry>
