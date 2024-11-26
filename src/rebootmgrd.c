@@ -170,7 +170,7 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
 		      SD_JSON_BUILD_PAIR("RebootStrategy", SD_JSON_BUILD_INTEGER(ctx->reboot_strategy)),
 		      SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str)),
 		      SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)),
-		      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(ctx->reboot_time?format_timestamp(buf, sizeof(buf), ctx->reboot_time):NULL)));
+		      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(ctx->reboot_time?format_timestamp(buf, sizeof(buf), ctx->reboot_time):"")));
 
 #if 0
   /* XXX find out how to enhance json records */

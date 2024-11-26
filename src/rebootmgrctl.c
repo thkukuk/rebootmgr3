@@ -311,7 +311,7 @@ print_full_status (void)
   else
     printf ("Status: %s\n", str);
 
-  if (status.reboot_time)
+  if (status.reboot_time && strlen (status.reboot_time) > 0)
     printf ("Reboot at: %s\n", status.reboot_time);
 
   r = rm_strategy_to_str (status.strategy, &str);
