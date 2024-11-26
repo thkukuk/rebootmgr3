@@ -1,9 +1,12 @@
-/* Copyright (c) 2016, 2017, 2024 Thorsten Kukuk
+//SPDX-License-Identifier: GPL-2.0-or-later
+
+/* Copyright (c) 2024 Thorsten Kukuk
    Author: Thorsten Kukuk <kukuk@suse.com>
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation in version 2 of the License.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,23 +23,41 @@
 #include <stdio.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <systemd/sd-journal.h>
+
 #include "log_msg.h"
 
+static int is_tty = 1;
 int debug_flag = 0;
 
 void
-log_msg (int type, const char *fmt,...)
+log_init (void)
 {
-  char string[400];
+  is_tty = isatty (STDOUT_FILENO);
+}
+
+void
+log_msg (int priority, const char *fmt, ...)
+{
   va_list ap;
 
   va_start (ap, fmt);
-  vsnprintf (string, sizeof (string), fmt, ap);
+
+  if (is_tty || debug_flag)
+    {
+      if (priority == LOG_ERR)
+	{
+	  vfprintf (stderr, fmt, ap);
+	  fputc ('\n', stderr);
+	}
+      else
+	{
+	  vprintf (fmt, ap);
+	  putchar ('\n');
+	}
+    }
+  else
+    sd_journal_printv (priority, fmt, ap);
+
   va_end (ap);
-
-  if (debug_flag)
-    fprintf (stderr, "%s\n", string);
-
-  if (type != LOG_DEBUG)
-    syslog (type, "%s", string); // XXX print to journal
 }

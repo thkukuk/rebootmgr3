@@ -1,9 +1,12 @@
-/* Copyright (c) 2016 Thorsten Kukuk
+//SPDX-License-Identifier: GPL-2.0-or-later
+
+/* Copyright (c) 2024 Thorsten Kukuk
    Author: Thorsten Kukuk <kukuk@suse.com>
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation in version 2 of the License.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -12,14 +15,12 @@
 
    You should have received a copy of the GNU General Public License along
    with this program; if not, see <http://www.gnu.org/licenses/>. */
-
-#ifndef _LOG_MSG_H
-#define _LOG_MSG_H 1
+					//
+#pragma once
 
 #include <syslog.h>
 
 extern int debug_flag;
 
-extern void log_msg (int type, const char *, ...);
-
-#endif
+extern void log_init (void);
+extern void log_msg (int priority, const char *fmt, ...);

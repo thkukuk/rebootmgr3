@@ -88,8 +88,8 @@ load_config (RM_CTX *ctx)
 	  free (str_duration);
 	  str_duration = NULL;
 	}
-      ctx->reboot_strategy = string_to_strategy(str_strategy, NULL);
-      if (str_start != NULL)
+      int r = rm_string_to_strategy (str_strategy, &(ctx->reboot_strategy));
+      if (r >= 0)
 	{
 	  int ret;
 

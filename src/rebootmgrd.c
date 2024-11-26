@@ -54,16 +54,18 @@ static SD_VARLINK_DEFINE_METHOD(
                 Status,
 		SD_VARLINK_FIELD_COMMENT("If a reboot is requested and if yes, which kind of reboot"),
                 SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
-                SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE));
+                SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_OUTPUT(RebootTime, SD_VARLINK_STRING, SD_VARLINK_NULLABLE));
 
 static SD_VARLINK_DEFINE_METHOD(
                 FullStatus,
 		SD_VARLINK_FIELD_COMMENT("Provide full status of rebootmgr"),
                 SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
                 SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
-                SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
-                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
-                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, SD_VARLINK_NULLABLE));
+		SD_VARLINK_DEFINE_OUTPUT(RebootTime, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+                SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, 0),
+                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, 0),
+                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, 0));
 
 
 static SD_VARLINK_DEFINE_ERROR(IncompleteRequest);
@@ -97,6 +99,7 @@ vl_method_status (sd_varlink *link, sd_json_variant *parameters,
   static const sd_json_dispatch_field dispatch_table[] = {
     {}
   };
+  char buf[FORMAT_TIMESTAMP_MAX];
   RM_CTX *ctx = userdata;
   int r;
 
@@ -120,8 +123,8 @@ vl_method_status (sd_varlink *link, sd_json_variant *parameters,
   else
     r = sd_json_buildo (&v,
 			SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)),
-			SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)));
-
+			SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)),
+			SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(format_timestamp(buf, sizeof(buf), ctx->reboot_time))));
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to build JSON data: %s", strerror (-r));
@@ -139,6 +142,7 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   static const sd_json_dispatch_field dispatch_table[] = {
     {}
   };
+  char buf[FORMAT_TIMESTAMP_MAX];
   RM_CTX *ctx = userdata;
   int r;
 
@@ -159,12 +163,15 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   if (ctx->maint_window_start)
     calendar_spec_to_string (ctx->maint_window_start, &str);
 
-  /* XXX Add RequestedMethod only if there was one */
+
+  /* XXX Add RequestedMethod and RebootTime only if there was one */
   r = sd_json_buildo (&v,
 		      SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)),
 		      SD_JSON_BUILD_PAIR("RebootStrategy", SD_JSON_BUILD_INTEGER(ctx->reboot_strategy)),
 		      SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str)),
-		      SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)));
+		      SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)),
+		      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(ctx->reboot_time?format_timestamp(buf, sizeof(buf), ctx->reboot_time):NULL)));
+
 #if 0
   /* XXX find out how to enhance json records */
   if (r >= 0 && ctx->reboot_method != RM_REBOOTMETHOD_UNKNOWN)
@@ -602,14 +609,12 @@ destroy_context (RM_CTX *ctx)
 static void
 print_help (void)
 {
-  fputs (_("rebootmgrd - reboot following a specified strategy\n\n"), stdout);
+  log_msg (LOG_INFO, _("rebootmgrd - reboot following a specified strategy"));
 
-  fputs (_("  -d,--debug     Debug mode, no reboot done\n"),
-         stdout);
-  fputs (_("  -v,--verbose   Verbose logging\n"),
-         stdout);
-  fputs (_("  -?, --help     Give this help list\n"), stdout);
-  fputs (_("      --version  Print program version\n"), stdout);
+  log_msg (LOG_INFO, _("  -d,--debug     Debug mode, no reboot done"));
+  log_msg (LOG_INFO, _("  -v,--verbose   Verbose logging"));
+  log_msg (LOG_INFO, _("  -?, --help     Give this help list"));
+  log_msg (LOG_INFO, _("      --version  Print program version"));
 }
 
 int
@@ -617,6 +622,8 @@ main (int argc, char **argv)
 {
   RM_CTX *ctx = NULL;
   int r;
+
+  log_init ();
 
   while (1)
     {

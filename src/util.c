@@ -50,34 +50,23 @@ duration_to_string (time_t duration)
   return p;
 }
 
-RM_RebootStrategy
-string_to_strategy(const char *str_strategy, int *error)
+int
+rm_string_to_strategy (const char *str_strategy, RM_RebootStrategy *ret)
 {
-  if (error) {
-    *error=0;
-  }
-  if (!str_strategy) {
-    if (error) {
-      *error=1;
-    }
-    return RM_REBOOTSTRATEGY_BEST_EFFORT;
-  }
+  *ret = RM_REBOOTSTRATEGY_UNKNOWN;
+  if (!str_strategy)
+    return -EINVAL;
 
-  if (strcasecmp (str_strategy, "best-effort") == 0 ||
-      strcasecmp (str_strategy, "best_effort") == 0)
-    return RM_REBOOTSTRATEGY_BEST_EFFORT;
+  if (strcasecmp (str_strategy, "best-effort") == 0)
+    *ret = RM_REBOOTSTRATEGY_BEST_EFFORT;
   else if (strcasecmp (str_strategy, "instantly") == 0)
-    return RM_REBOOTSTRATEGY_INSTANTLY;
-  else if (strcasecmp (str_strategy, "maint_window") == 0 ||
-     strcasecmp (str_strategy, "maint-window") == 0)
-    return RM_REBOOTSTRATEGY_MAINT_WINDOW;
+    *ret = RM_REBOOTSTRATEGY_INSTANTLY;
+  else if (strcasecmp (str_strategy, "maint-window") == 0)
+    *ret = RM_REBOOTSTRATEGY_MAINT_WINDOW;
   else if (strcasecmp (str_strategy, "off") == 0)
-    return RM_REBOOTSTRATEGY_OFF;
+    *ret = RM_REBOOTSTRATEGY_OFF;
 
-  if (error)
-    *error=1;
-
-  return RM_REBOOTSTRATEGY_BEST_EFFORT;
+  return 0;
 }
 
 int
