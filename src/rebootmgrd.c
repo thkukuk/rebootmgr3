@@ -51,6 +51,12 @@ static SD_VARLINK_DEFINE_METHOD(
 		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
 
 static SD_VARLINK_DEFINE_METHOD(
+		SetStrategy,
+		SD_VARLINK_FIELD_COMMENT("Set new strategy"),
+		SD_VARLINK_DEFINE_INPUT(Strategy, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
+
+static SD_VARLINK_DEFINE_METHOD(
                 Status,
 		SD_VARLINK_FIELD_COMMENT("If a reboot is requested and if yes, which kind of reboot"),
                 SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
@@ -68,7 +74,7 @@ static SD_VARLINK_DEFINE_METHOD(
                 SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, 0));
 
 
-static SD_VARLINK_DEFINE_ERROR(IncompleteRequest);
+static SD_VARLINK_DEFINE_ERROR(InvalidParameter);
 static SD_VARLINK_DEFINE_ERROR(AlreadyInProgress);
 static SD_VARLINK_DEFINE_ERROR(NoRebootScheduled);
 
@@ -80,12 +86,14 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_method_Reboot,
 		SD_VARLINK_SYMBOL_COMMENT("Cancel a reboot"),
                 &vl_method_Cancel,
+		SD_VARLINK_SYMBOL_COMMENT("Set new strategy"),
+                &vl_method_SetStrategy,
 		SD_VARLINK_SYMBOL_COMMENT("Current status if a reboot got requested"),
                 &vl_method_Status,
 		SD_VARLINK_SYMBOL_COMMENT("Current status and configuration"),
                 &vl_method_FullStatus,
-		SD_VARLINK_SYMBOL_COMMENT("Reboot request was incomplete/wrong values"),
-                &vl_error_IncompleteRequest,
+		SD_VARLINK_SYMBOL_COMMENT("Invalid Parameter"),
+                &vl_error_InvalidParameter,
 		SD_VARLINK_SYMBOL_COMMENT("A reboot is already requested"),
                 &vl_error_AlreadyInProgress,
                 SD_VARLINK_SYMBOL_COMMENT("No Reboot was scheduled"),
@@ -420,6 +428,57 @@ vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
 }
 
 static int
+vl_method_strategy (sd_varlink *link, sd_json_variant *parameters,
+		    sd_varlink_method_flags_t _unused_(flags),
+		    void *userdata)
+{
+  struct p {
+    RM_RebootStrategy strategy;
+  } p = {
+    .strategy = RM_REBOOTSTRATEGY_UNKNOWN,
+  };
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "Strategy", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct p, strategy), SD_JSON_MANDATORY },
+    {}
+  };
+  RM_CTX *ctx = userdata;
+  int r;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "Varlink method \"SetStrategy\" called...");
+
+  r = sd_varlink_dispatch (link, parameters, dispatch_table, &p);
+  if (r != 0)
+    {
+      log_msg (LOG_ERR, "Set strategy request: varlik dispatch failed: %s", strerror (-r));
+      return r;
+    }
+
+  if (p.strategy > RM_REBOOTSTRATEGY_UNKNOWN &&
+      p.strategy >= RM_REBOOTSTRATEGY_OFF &&
+      ctx->reboot_strategy != p.strategy)
+    {
+      const char *str;
+
+      ctx->reboot_strategy = p.strategy;
+      save_config (ctx, SET_STRATEGY);
+
+      rm_strategy_to_str (p.strategy, &str);
+      log_msg (LOG_INFO, "Reboot strategy changed to '%s'", str);
+      ctx->reboot_strategy = p.strategy;
+      save_config (ctx, SET_STRATEGY);
+    }
+  else
+    {
+      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value (%i)", p.strategy);
+      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
+				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+    }
+
+  return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
+}
+
+static int
 vl_method_cancel (sd_varlink *link, sd_json_variant *parameters,
 		  sd_varlink_method_flags_t _unused_(flags),
 		  void *userdata)
@@ -532,10 +591,11 @@ run_varlink (RM_CTX *ctx)
     }
 
   r = sd_varlink_server_bind_method_many (varlink_server,
-					  "org.openSUSE.rebootmgr.Reboot", vl_method_reboot,
-					  "org.openSUSE.rebootmgr.Cancel", vl_method_cancel,
-					  "org.openSUSE.rebootmgr.Status", vl_method_status,
-					  "org.openSUSE.rebootmgr.FullStatus", vl_method_fullstatus);
+					  "org.openSUSE.rebootmgr.Reboot",      vl_method_reboot,
+					  "org.openSUSE.rebootmgr.Cancel",      vl_method_cancel,
+					  "org.openSUSE.rebootmgr.SetStrategy", vl_method_strategy,
+					  "org.openSUSE.rebootmgr.Status",      vl_method_status,
+					  "org.openSUSE.rebootmgr.FullStatus",  vl_method_fullstatus);
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to bind Varlink methods: %s",

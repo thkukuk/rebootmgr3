@@ -171,12 +171,74 @@ cancel_reboot (void)
     }
 
   if (p.success == true)
-    printf (_("Request to cancel reboot  was successful\n"));
+    printf (_("Request to cancel reboot was successful\n"));
   else
     printf (_("Request to cancel reboot failed\n"));
 
   return 0;
 }
+
+static int
+set_strategy (RM_RebootStrategy strategy)
+{
+  struct p {
+    bool success;
+  } p = {
+    .success = false
+  };
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "Success", SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_stdbool, offsetof(struct p, success), 0 },
+      {}
+  };
+  _cleanup_(sd_varlink_unrefp) sd_varlink *link = NULL;
+  _cleanup_(sd_json_variant_unrefp) sd_json_variant *params = NULL;
+  sd_json_variant *result;
+  int r;
+
+  r = connect_to_rebootmgr (&link);
+  if (r < 0)
+    return r;
+
+  r = sd_json_buildo (&params,
+		      SD_JSON_BUILD_PAIR("Strategy", SD_JSON_BUILD_INTEGER(strategy)));
+  if (r < 0)
+    {
+      fprintf (stderr, "Failed to build JSON data: %s\n", strerror (-r));
+      return r;
+    }
+
+  const char *error_id;
+  r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetStrategy", params, &result, &error_id);
+  if (r < 0)
+    {
+      fprintf (stderr, "Failed to call reboot method: %s\n", strerror (-r));
+      return r;
+    }
+
+  if (error_id && strlen (error_id) > 0)
+    {
+      if (strcmp (error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
+	printf (_("Strategy '%i' got rejected as invalid\n"), strategy);
+      else
+	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      return -1;
+    }
+
+  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  if (r < 0)
+    {
+      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      return r;
+    }
+
+  if (p.success == true)
+    printf (_("Request to set new strategy was successful\n"));
+  else
+    printf (_("Request to set new strategy failed\n"));
+
+  return 0;
+}
+
 
 static int
 get_status (RM_RebootStatus *status, RM_RebootMethod *method, char **reboot_time)
@@ -493,11 +555,10 @@ main (int argc, char **argv)
 	  int r = rm_string_to_strategy (argv[2], &strategy);
 	  if (r < 0)
 	    usage(1);
-
+	  retval = set_strategy (strategy);
 	}
       else
 	usage(1);
-      // XXX retval = set_strategy (connection, strategy);
     }
   else if (strcasecmp ("get-strategy", argv[1]) == 0)
     {
