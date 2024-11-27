@@ -41,7 +41,7 @@ duration_to_string (time_t duration)
 {
   char buf[DURATION_LEN];
   char *p;
-  if (strftime(buf, DURATION_LEN, "%Hh%Mm", gmtime(&duration)) == 0) {
+  if (strftime(buf, DURATION_LEN, "%Hh %Mm", gmtime(&duration)) == 0) {
     return 0;
   }
   p = malloc(DURATION_LEN);

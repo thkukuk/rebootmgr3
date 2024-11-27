@@ -534,7 +534,10 @@ main (int argc, char **argv)
       r = get_full_status (&status);
       if (r < 0)
 	retval = 1;
-      // XXX retval = get_window (connection);
+      else
+	printf (_("Maintenance window is set to '%s', lasting %s.\n"),
+		status.maint_window_start,
+		duration_to_string (status.maint_window_duration));
     }
   else if (strcasecmp ("set-window", argv[1]) == 0 ||
            strcasecmp ("set_window", argv[1]) == 0)
