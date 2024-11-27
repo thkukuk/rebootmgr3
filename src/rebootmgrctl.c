@@ -27,7 +27,6 @@
 
 #include "rebootmgr.h"
 #include "util.h"
-#include "parse-duration.h"
 
 /* Takes inspiration from Rust's Option::take() method: reads and returns a pointer, but at the same time
  * resets it to NULL. See: https://doc.rust-lang.org/std/option/enum.Option.html#method.take */
@@ -159,7 +158,10 @@ cancel_reboot (void)
     }
   if (error_id && strlen (error_id) > 0)
     {
-      fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      if (strcmp (error_id, "org.openSUSE.rebootmgr.NoRebootScheduled") == 0)
+	printf (_("There is no reboot scheduled which can be canceld\n"));
+      else
+	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
     }
 
@@ -211,7 +213,7 @@ set_strategy (RM_RebootStrategy strategy)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetStrategy", params, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call reboot method: %s\n", strerror (-r));
+      fprintf (stderr, "Failed to call SetStrategy method: %s\n", strerror (-r));
       return r;
     }
 
@@ -239,6 +241,73 @@ set_strategy (RM_RebootStrategy strategy)
   return 0;
 }
 
+static int
+set_window (const char *start, const char *duration)
+{
+  struct p {
+    char *variable;
+    bool success;
+  } p = {
+    .variable = NULL,
+    .success = false
+  };
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "Variable", SD_JSON_VARIANT_STRING,  sd_json_dispatch_string,  offsetof(struct p, variable), 0 },
+    { "Success",  SD_JSON_VARIANT_BOOLEAN, sd_json_dispatch_stdbool, offsetof(struct p, success), 0 },
+      {}
+  };
+  _cleanup_(sd_varlink_unrefp) sd_varlink *link = NULL;
+  _cleanup_(sd_json_variant_unrefp) sd_json_variant *params = NULL;
+  sd_json_variant *result;
+  int r;
+
+  r = connect_to_rebootmgr (&link);
+  if (r < 0)
+    return r;
+
+  r = sd_json_buildo (&params,
+		      SD_JSON_BUILD_PAIR("Start", SD_JSON_BUILD_STRING(start)),
+  		      SD_JSON_BUILD_PAIR("Duration", SD_JSON_BUILD_STRING(duration)));
+  if (r < 0)
+    {
+      fprintf (stderr, "Failed to build JSON data: %s\n", strerror (-r));
+      return r;
+    }
+
+  const char *error_id;
+  r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetWindow", params, &result, &error_id);
+  if (r < 0)
+    {
+      fprintf (stderr, "Failed to call SetWindow method: %s\n", strerror (-r));
+      return r;
+    }
+
+  /* dispatch before checking error_id, we may need the result for the error
+     message */
+  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  if (r < 0)
+    {
+      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      return r;
+    }
+
+  if (error_id && strlen (error_id) > 0)
+    {
+      if (strcmp (error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
+	printf (_("New maintenance window got rejected as invalid (%s)\n"),
+		p.variable);
+      else
+	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      return -1;
+    }
+
+  if (p.success == true)
+    printf (_("Request to set new maintenance window was successful\n"));
+  else
+    printf (_("Request to set new maintenance window failed\n"));
+
+  return 0;
+}
 
 static int
 get_status (RM_RebootStatus *status, RM_RebootMethod *method, char **reboot_time)
@@ -600,34 +669,10 @@ main (int argc, char **argv)
 		status.maint_window_start,
 		duration_to_string (status.maint_window_duration));
     }
-  else if (strcasecmp ("set-window", argv[1]) == 0 ||
-           strcasecmp ("set_window", argv[1]) == 0)
+  else if (strcasecmp ("set-window", argv[1]) == 0)
     {
-      if (argc > 3)
-	{
-	  const char *start = argv[2];
-	  const char *duration = argv[3];
-	  CalendarSpec *tmp = NULL;
-
-	  if (strlen (argv[2]) > 0)
-	    {
-
-	      if ((calendar_spec_from_string (start, &tmp)) < 0)
-		{
-		  printf (_("Invalid time for maintenance window\n"));
-		  retval = 1;
-		}
-	      else if (parse_duration (duration) ==  BAD_TIME)
-		{
-		  printf (_("Invalid duration format for maintenance window\n"));
-		  retval = 1;
-		}
-	    }
-	  if (retval == 0)
-	    {
-	      // XXX retval = set_window (connection, start, duration);
-	    }
-	}
+      if (argc == 4)
+	retval = set_window (argv[2], argv[3]);
       else
 	usage (1);
     }

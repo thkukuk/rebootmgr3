@@ -13,17 +13,13 @@
    You should have received a copy of the GNU General Public License along
    with this program; if not, see <http://www.gnu.org/licenses/>. */
 
+#pragma once
+
 #include "rebootmgr.h"
 #include "calendarspec.h"
 
-#ifndef __CONFIG_FILE_H__
-#define __CONFIG_FILE_H__
-
 #define SET_STRATEGY 1
-#define SET_LOCK_GROUP 2
-#define SET_MAINT_WINDOW 3
+#define SET_MAINT_WINDOW 2
 
 int load_config (RM_CTX *ctx);
 void save_config (RM_CTX *ctx, int field);
-
-#endif /* __CONFIG_FILE_H__ */

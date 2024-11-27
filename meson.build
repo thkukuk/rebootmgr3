@@ -81,7 +81,6 @@ executable('rebootmgrctl',
            rebootmgrctl_c,
            include_directories : inc,
            dependencies : [libeconf, libsystemd],
-	   link_with : [libcalendarspec_a],
            install : true,
 	   install_dir: bindir)
 

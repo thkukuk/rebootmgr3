@@ -29,9 +29,7 @@
 #include "log_msg.h"
 #include "rebootmgr.h"
 #include "util.h"
-#if 0
 #include "parse-duration.h"
-#endif
 
 static int verbose_flag = 0;
 
@@ -54,6 +52,14 @@ static SD_VARLINK_DEFINE_METHOD(
 		SetStrategy,
 		SD_VARLINK_FIELD_COMMENT("Set new strategy"),
 		SD_VARLINK_DEFINE_INPUT(Strategy, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
+
+static SD_VARLINK_DEFINE_METHOD(
+		SetWindow,
+		SD_VARLINK_FIELD_COMMENT("Set new maintenance window"),
+		SD_VARLINK_DEFINE_INPUT(Start, SD_VARLINK_STRING, 0),
+		SD_VARLINK_DEFINE_INPUT(Duration, SD_VARLINK_STRING, 0),
+		SD_VARLINK_DEFINE_OUTPUT(Variable, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
 		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
 
 static SD_VARLINK_DEFINE_METHOD(
@@ -88,6 +94,8 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_method_Cancel,
 		SD_VARLINK_SYMBOL_COMMENT("Set new strategy"),
                 &vl_method_SetStrategy,
+		SD_VARLINK_SYMBOL_COMMENT("Set new maintenance window"),
+                &vl_method_SetWindow,
 		SD_VARLINK_SYMBOL_COMMENT("Current status if a reboot got requested"),
                 &vl_method_Status,
 		SD_VARLINK_SYMBOL_COMMENT("Current status and configuration"),
@@ -170,7 +178,6 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   char *str = NULL;
   if (ctx->maint_window_start)
     calendar_spec_to_string (ctx->maint_window_start, &str);
-
 
   /* XXX Add RequestedMethod and RebootTime only if there was one */
   r = sd_json_buildo (&v,
@@ -428,9 +435,9 @@ vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
 }
 
 static int
-vl_method_strategy (sd_varlink *link, sd_json_variant *parameters,
-		    sd_varlink_method_flags_t _unused_(flags),
-		    void *userdata)
+vl_method_set_strategy (sd_varlink *link, sd_json_variant *parameters,
+			sd_varlink_method_flags_t _unused_(flags),
+			void *userdata)
 {
   struct p {
     RM_RebootStrategy strategy;
@@ -474,6 +481,62 @@ vl_method_strategy (sd_varlink *link, sd_json_variant *parameters,
       return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
 				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
+
+  return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
+}
+
+static int
+vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
+		      sd_varlink_method_flags_t _unused_(flags),
+		      void *userdata)
+{
+  struct p {
+    char *start;
+    char *duration;
+  } p = {
+    .start = NULL,
+    .duration = NULL
+  };
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "Start",    SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct p, start), SD_JSON_MANDATORY },
+    { "Duration", SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct p, duration), SD_JSON_MANDATORY },
+    {}
+  };
+  RM_CTX *ctx = userdata;
+  int r;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "Varlink method \"SetWindow\" called...");
+
+  r = sd_varlink_dispatch (link, parameters, dispatch_table, &p);
+  if (r != 0)
+    {
+      log_msg (LOG_ERR, "Set strategy request: varlik dispatch failed: %s", strerror (-r));
+      return r;
+    }
+
+  if (p.start == NULL || strlen (p.start) == 0 ||
+      calendar_spec_from_string (p.start, &ctx->maint_window_start) < 0)
+    {
+      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value for window start (%s)", p.start);
+      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
+				 SD_JSON_BUILD_PAIR_STRING("Variable", "start time"),
+				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+    }
+  if (p.duration == NULL || strlen (p.duration) == 0 ||
+      (ctx->maint_window_duration = parse_duration (p.duration)) == BAD_TIME)
+    {
+      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value for duration (%s)", p.duration);
+      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
+				 SD_JSON_BUILD_PAIR_STRING("Variable", "duration"),
+				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+    }
+
+  char *str = NULL;
+  calendar_spec_to_string (ctx->maint_window_start, &str);
+  log_msg (LOG_INFO, "Maintenance window changed to '%s', lasting %s",
+	   str, duration_to_string (ctx->maint_window_duration));
+  save_config (ctx, SET_MAINT_WINDOW);
 
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
@@ -593,7 +656,8 @@ run_varlink (RM_CTX *ctx)
   r = sd_varlink_server_bind_method_many (varlink_server,
 					  "org.openSUSE.rebootmgr.Reboot",      vl_method_reboot,
 					  "org.openSUSE.rebootmgr.Cancel",      vl_method_cancel,
-					  "org.openSUSE.rebootmgr.SetStrategy", vl_method_strategy,
+					  "org.openSUSE.rebootmgr.SetStrategy", vl_method_set_strategy,
+					  "org.openSUSE.rebootmgr.SetWindow",   vl_method_set_window,
 					  "org.openSUSE.rebootmgr.Status",      vl_method_status,
 					  "org.openSUSE.rebootmgr.FullStatus",  vl_method_fullstatus);
   if (r < 0)
