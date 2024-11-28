@@ -16,7 +16,6 @@
 #pragma once
 
 #include "rebootmgr.h"
-#include "calendarspec.h"
 
 #define SET_STRATEGY 1
 #define SET_MAINT_WINDOW 2

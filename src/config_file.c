@@ -21,19 +21,25 @@
 #include <string.h>
 #include <libeconf.h>
 
-#include "calendarspec.h"
-#include "parse-duration.h"
 #include "config_file.h"
 #include "log_msg.h"
+#include "calendarspec.h"
+#include "parse-duration.h"
 #include "util.h"
 
 #define RM_GROUP "rebootmgr"
 
+static void
+econf_freeFilep (econf_file **key_file)
+{
+  econf_freeFile (*key_file);
+  *key_file = NULL;
+}
+
 int
 load_config (RM_CTX *ctx)
 {
-  econf_file *key_file = NULL;
-  int retval = 0;
+  _cleanup_(econf_freeFilep) econf_file *key_file = NULL;
   econf_err error;
 
   error = econf_readConfig (&key_file,
@@ -45,7 +51,7 @@ load_config (RM_CTX *ctx)
     {
       /* ignore if there is no configuration file at all */
       if (error == ECONF_NOFILE)
-	return retval;
+	return 0;
 
       log_msg (LOG_ERR, "econf_readConfig: %s\n",
                econf_errString (error));
@@ -56,31 +62,28 @@ load_config (RM_CTX *ctx)
       log_msg (LOG_ERR, "Cannot load 'rebootmgrd.conf'");
   else
     {
-      char *str_start = NULL, *str_duration = NULL, *str_strategy = NULL;
+      _cleanup_(freep) char *str_start = NULL, *str_duration = NULL, *str_strategy = NULL;
 
       error = econf_getStringValue (key_file, RM_GROUP, "window-start", &str_start);
       if (error && error != ECONF_NOKEY)
 	{
 	  log_msg (LOG_ERR, "ERROR (econf): cannot get key 'window-start': %s",
 		   econf_errString(error));
-	  retval = -1;
-	  goto out;
+	  return -1;
 	}
       error = econf_getStringValue (key_file, RM_GROUP, "window-duration", &str_duration);
       if (error && error != ECONF_NOKEY)
 	{
 	  log_msg (LOG_ERR, "ERROR (econf): cannot get key 'window-duration': %s",
 		   econf_errString(error));
-	  retval = -1;
-	  goto out;
+	  return -1;
 	}
       error = econf_getStringValue (key_file, RM_GROUP, "strategy", &str_strategy);
       if (error && error != ECONF_NOKEY)
 	{
 	  log_msg (LOG_ERR, "ERROR (econf): cannot get key 'strategy': %s",
 		   econf_errString(error));
-	  retval = -1;
-	  goto out;
+	  return -1;
 	}
 
       if (str_start == NULL && str_duration != NULL)
@@ -102,13 +105,8 @@ load_config (RM_CTX *ctx)
 	    log_msg (LOG_ERR, "ERROR: cannot parse window-duration '%s'",
 		     str_duration);
 	}
-    out:
-      econf_free (key_file);
-      free (str_start);
-      free (str_duration);
-      free (str_strategy);
     }
-  return retval;
+  return 0;
 }
 
 
