@@ -175,7 +175,7 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   if (ctx->temp_off)
     tmp_status = RM_REBOOTSTATUS_NOT_REQUESTED;
 
-  char *str = NULL;
+  _cleanup_(freep) char *str = NULL;
   if (ctx->maint_window_start)
     calendar_spec_to_string (ctx->maint_window_start, &str);
 
@@ -183,7 +183,7 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   r = sd_json_buildo (&v,
 		      SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)),
 		      SD_JSON_BUILD_PAIR("RebootStrategy", SD_JSON_BUILD_INTEGER(ctx->reboot_strategy)),
-		      SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str)),
+		      SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str?str:"")),
 		      SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)),
 		      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(ctx->reboot_time?format_timestamp(buf, sizeof(buf), ctx->reboot_time):"")));
 
@@ -206,7 +206,7 @@ static int
 calc_reboot_time (RM_CTX *ctx, usec_t *ret)
 {
   usec_t next;
-  usec_t curr = now(CLOCK_REALTIME);
+  usec_t curr = now (CLOCK_REALTIME);
   usec_t duration = ctx->maint_window_duration * USEC_PER_SEC;
 
   /* Check, if we are inside the maintenance window. If yes, reboot now. */
@@ -395,14 +395,18 @@ vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
   ctx->reboot_status = RM_REBOOTSTATUS_REQUESTED;
 
   usec_t reboot_time;
-  r = calc_reboot_time (ctx, &reboot_time);
-  if (r < 0)
+  if (p.force)
+      reboot_time = now (CLOCK_REALTIME);
+  else
     {
-      // XXX sd_varlink_error(), reset reboot_status
-      log_msg (LOG_ERR, "Cannot calculate reboot timer: %s", strerror (-r));
-      return r;
+      r = calc_reboot_time (ctx, &reboot_time);
+      if (r < 0)
+	{
+	  // XXX sd_varlink_error(), reset reboot_status
+	  log_msg (LOG_ERR, "Cannot calculate reboot timer: %s", strerror (-r));
+	  return r;
+	}
     }
-
   r = sd_event_add_time (ctx->loop, &ctx->timer, CLOCK_REALTIME,
 			 reboot_time, 0, time_handler, ctx);
 
@@ -532,10 +536,15 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
 				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
 
-  char *str = NULL;
-  calendar_spec_to_string (ctx->maint_window_start, &str);
-  log_msg (LOG_INFO, "Maintenance window changed to '%s', lasting %s",
-	   str, duration_to_string (ctx->maint_window_duration));
+  /* Informal log message */
+  _cleanup_(freep) char *start_str = NULL;
+  _cleanup_(freep) const char *duration_str = NULL;
+  calendar_spec_to_string (ctx->maint_window_start, &start_str);
+  r = rm_duration_to_string (ctx->maint_window_duration, &duration_str);
+  if (r >= 0)
+    log_msg (LOG_INFO, "Maintenance window changed to '%s', lasting %s",
+	     start_str, duration_str);
+
   save_config (ctx, SET_MAINT_WINDOW);
 
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
