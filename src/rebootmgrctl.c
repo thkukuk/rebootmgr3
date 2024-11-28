@@ -28,6 +28,10 @@
 #include "rebootmgr.h"
 #include "util.h"
 
+#ifndef _
+#define _(String) gettext(String)
+#endif
+
 /* Takes inspiration from Rust's Option::take() method: reads and returns a pointer, but at the same time
  * resets it to NULL. See: https://doc.rust-lang.org/std/option/enum.Option.html#method.take */
 #define TAKE_GENERIC(var, type, nullvalue)                       \
@@ -121,11 +125,14 @@ trigger_reboot (RM_RebootMethod method, bool forced)
 		method_str, p.reboot_time);
       else
 	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+
+      free (p.reboot_time);
       return -1;
     }
 
   printf (_("The %s got scheduled for %s\n"),  method_str, p.reboot_time);
 
+  free (p.reboot_time);
   return 0;
 }
 
@@ -298,6 +305,7 @@ set_window (const char *start, const char *duration)
 		p.variable);
       else
 	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      free (p.variable);
       return -1;
     }
 
@@ -305,6 +313,8 @@ set_window (const char *start, const char *duration)
     printf (_("Request to set new maintenance window was successful\n"));
   else
     printf (_("Request to set new maintenance window failed\n"));
+
+  free (p.variable);
 
   return 0;
 }
@@ -372,6 +382,13 @@ struct status {
   char *reboot_time;
 };
 
+static void
+struct_status_free (struct status *p)
+{
+  p->maint_window_start = mfree (p->maint_window_start);
+  p->reboot_time = mfree (p->reboot_time);
+}
+
 static int
 get_full_status (struct status *p)
 {
@@ -418,7 +435,7 @@ get_full_status (struct status *p)
 static int
 print_full_status (void)
 {
-  struct status status = {
+  _cleanup_(struct_status_free) struct status status = {
     .status = RM_REBOOTSTATUS_NOT_REQUESTED,
     .method = RM_REBOOTMETHOD_UNKNOWN,
     .strategy = RM_REBOOTSTRATEGY_UNKNOWN,
@@ -456,8 +473,18 @@ print_full_status (void)
 
   if (status.maint_window_start)
     {
+      _cleanup_(freep) const char *duration_str;
+
+      r = rm_duration_to_string (status.maint_window_duration, &duration_str);
+      if (r < 0)
+	{
+	  fprintf (stderr, _("Error converting duration to string: %s\n"),
+		   strerror (-r));
+	  return r;
+	}
+
       printf ("Start of maintenance window: %s\n", status.maint_window_start);
-      printf ("Duration of maintenance window: %s\n", duration_to_string (status.maint_window_duration));
+      printf ("Duration of maintenance window: %s\n", duration_str);
     }
 
   return 0;
@@ -539,14 +566,15 @@ main (int argc, char **argv)
       int full = 0;
       RM_RebootStatus r_status = 0;
       RM_RebootMethod r_method = 0;
-      char *r_time = NULL;
+      _cleanup_(freep) char *r_time = NULL;
 
       if (argc == 3)
 	{
 	  if (strcasecmp ("-q", argv[2]) == 0 ||
 	      strcasecmp ("--quiet", argv[2]) == 0)
 	    quiet = 1;
-	  if (strcasecmp ("--full", argv[2]) == 0)
+	  if (strcasecmp ("-f", argv[2]) == 0 ||
+	      strcasecmp ("--full", argv[2]) == 0)
 	    full = 1;
 	}
       else if (argc > 3)
@@ -665,9 +693,19 @@ main (int argc, char **argv)
       if (r < 0)
 	retval = 1;
       else
-	printf (_("Maintenance window is set to '%s', lasting %s.\n"),
-		status.maint_window_start,
-		duration_to_string (status.maint_window_duration));
+	{
+	  _cleanup_(freep) const char *duration_str = NULL;
+	  r = rm_duration_to_string (status.maint_window_duration, &duration_str);
+	  if (r < 0)
+	    {
+	      fprintf (stderr, _("Error converting duration to string: %s\n"),
+		       strerror (-r));
+	      retval = 1;
+	    }
+	  else
+	    printf (_("Maintenance window is set to '%s', lasting %s.\n"),
+		    status.maint_window_start, duration_str);
+	}
     }
   else if (strcasecmp ("set-window", argv[1]) == 0)
     {

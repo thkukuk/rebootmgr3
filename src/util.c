@@ -1,9 +1,12 @@
-/* Copyright (c) 2016 Daniel Molkentin
-   Author: Daniel Molkentin <dmolkentin@suse.com>
+//SPDX-License-Identifier: GPL-2.0-or-later
+
+/* Copyright (c) 2024 Thorsten Kukuk
+   Author: Thorsten Kukuk <kukuk@suse.com>
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation in version 2 of the License.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -13,21 +16,17 @@
    You should have received a copy of the GNU General Public License along
    with this program; if not, see <http://www.gnu.org/licenses/>. */
 
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <string.h>
+#include <time.h>
 #include <errno.h>
-#include <unistd.h>
 #include <stdlib.h>
-
-#include "calendarspec.h"
-#include "parse-duration.h"
+#include <string.h>
+#include <libintl.h>
 
 #include "util.h"
 
-#define DURATION_LEN 10
+#ifndef _
+#define _(String) gettext(String)
+#endif
 
 const char *
 bool_to_str (bool var)
@@ -35,19 +34,37 @@ bool_to_str (bool var)
   return var?"true":"false";
 }
 
-/* XXX */
-char *
-duration_to_string (time_t duration)
+int
+rm_duration_to_string (time_t duration, const char **ret)
 {
-  char buf[DURATION_LEN];
-  char *p;
-  if (strftime(buf, DURATION_LEN, "%Hh %Mm", gmtime(&duration)) == 0) {
-    return 0;
-  }
-  p = malloc(DURATION_LEN);
-  strncpy(p, buf, DURATION_LEN);
+  char buf[18];
+  struct tm tm;
+  const char *fmt;
 
-  return p;
+  if (gmtime_r (&duration, &tm) == NULL)
+    return -errno;
+
+  if (tm.tm_sec > 0)
+    fmt = "%T";
+  else
+    fmt = "%R";
+
+  size_t len = strftime (buf, sizeof (buf), fmt, &tm);
+  if (len == 0)
+    {
+      *ret = NULL;
+      return -ENOSPC;
+    }
+
+  char *p = malloc (len + 1);
+  if (p == NULL)
+    return -ENOMEM;
+
+  strcpy(p, buf);
+
+  *ret = p;
+
+  return 0;
 }
 
 int

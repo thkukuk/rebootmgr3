@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <libintl.h>
 #include <systemd/sd-event.h>
 #include "calendarspec.h"
 
@@ -25,6 +24,16 @@
 
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
 #define _unused_(x) x __attribute__((unused))
+
+#define mfree(memory)                           \
+        ({                                      \
+                free(memory);                   \
+                (typeof(memory)) NULL;          \
+        })
+
+static inline void freep(void *p) {
+        *(void**)p = mfree(*(void**) p);
+}
 
 #define RM_VARLINK_SOCKET       "/run/rebootmgr/rebootmgrd.socket"
 
