@@ -36,15 +36,15 @@ static int verbose_flag = 0;
 /* XXX Implement SD_VARLINK_DEFINE_ENUM_VALUE ? */
 
 static SD_VARLINK_DEFINE_METHOD(
-                Reboot,
+		Reboot,
 		SD_VARLINK_FIELD_COMMENT("Request a reboot"),
-                SD_VARLINK_DEFINE_INPUT(Reboot, SD_VARLINK_INT,  0),
-                SD_VARLINK_DEFINE_INPUT(Force, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_INPUT(Reboot, SD_VARLINK_INT,  0),
+		SD_VARLINK_DEFINE_INPUT(Force, SD_VARLINK_BOOL, SD_VARLINK_NULLABLE),
 		SD_VARLINK_DEFINE_OUTPUT(Method, SD_VARLINK_INT, 0),
 		SD_VARLINK_DEFINE_OUTPUT(Scheduled, SD_VARLINK_STRING, 0));
 
 static SD_VARLINK_DEFINE_METHOD(
-                Cancel,
+		Cancel,
 		SD_VARLINK_FIELD_COMMENT("Cancel a reboot"),
 		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
 
@@ -63,22 +63,27 @@ static SD_VARLINK_DEFINE_METHOD(
 		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
 
 static SD_VARLINK_DEFINE_METHOD(
-                Status,
+		Status,
 		SD_VARLINK_FIELD_COMMENT("If a reboot is requested and if yes, which kind of reboot"),
-                SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
-                SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
 		SD_VARLINK_DEFINE_OUTPUT(RebootTime, SD_VARLINK_STRING, SD_VARLINK_NULLABLE));
 
 static SD_VARLINK_DEFINE_METHOD(
-                FullStatus,
+		FullStatus,
 		SD_VARLINK_FIELD_COMMENT("Provide full status of rebootmgr"),
-                SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
-                SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
 		SD_VARLINK_DEFINE_OUTPUT(RebootTime, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
-                SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, 0),
-                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, 0),
-                SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, 0));
+		SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, 0),
+		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, 0));
 
+static SD_VARLINK_DEFINE_METHOD(
+		Quit,
+		SD_VARLINK_FIELD_COMMENT("Stop the daemon"),
+		SD_VARLINK_DEFINE_INPUT(ExitCode, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_OUTPUT(Success, SD_VARLINK_BOOL, 0));
 
 static SD_VARLINK_DEFINE_ERROR(InvalidParameter);
 static SD_VARLINK_DEFINE_ERROR(AlreadyInProgress);
@@ -100,6 +105,8 @@ SD_VARLINK_DEFINE_INTERFACE(
                 &vl_method_Status,
 		SD_VARLINK_SYMBOL_COMMENT("Current status and configuration"),
                 &vl_method_FullStatus,
+		SD_VARLINK_SYMBOL_COMMENT("Stop the daemon"),
+                &vl_method_Quit,
 		SD_VARLINK_SYMBOL_COMMENT("Invalid Parameter"),
                 &vl_error_InvalidParameter,
 		SD_VARLINK_SYMBOL_COMMENT("A reboot is already requested"),
@@ -581,8 +588,49 @@ vl_method_cancel (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
-  sd_event_source_unref (ctx->timer);
-  ctx->timer = NULL;
+  ctx->timer = sd_event_source_unref (ctx->timer);
+  ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
+  ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
+
+  return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
+}
+
+static int
+vl_method_quit (sd_varlink *link, sd_json_variant *parameters,
+		  sd_varlink_method_flags_t _unused_(flags),
+		  void *userdata)
+{
+  struct p {
+    int code;
+  } p = {
+    .code = 0
+  };
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "ExitCode", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct p, code), 0 },
+    {}
+  };
+  RM_CTX *ctx = userdata;
+  int r;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "Varlink method \"Quit\" called...");
+
+  r = sd_varlink_dispatch (link, parameters, dispatch_table, /* userdata= */ NULL);
+  if (r != 0)
+    {
+      log_msg (LOG_ERR, "Quit request: varlik dispatch failed: %s", strerror (-r));
+      return r;
+    }
+
+  r = sd_event_exit (ctx->loop, p.code);
+  if (r != 0)
+    {
+      log_msg (LOG_ERR, "Quit request: disabling event loop failed: %s",
+	       strerror (-r));
+      return r;
+    }
+
+  ctx->timer = sd_event_source_unref (ctx->timer);
   ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
   ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
 
@@ -665,6 +713,7 @@ run_varlink (RM_CTX *ctx)
   r = sd_varlink_server_bind_method_many (varlink_server,
 					  "org.openSUSE.rebootmgr.Reboot",      vl_method_reboot,
 					  "org.openSUSE.rebootmgr.Cancel",      vl_method_cancel,
+					  "org.openSUSE.rebootmgr.Quit",        vl_method_quit,
 					  "org.openSUSE.rebootmgr.SetStrategy", vl_method_set_strategy,
 					  "org.openSUSE.rebootmgr.SetWindow",   vl_method_set_window,
 					  "org.openSUSE.rebootmgr.Status",      vl_method_status,
@@ -732,8 +781,7 @@ destroy_context (RM_CTX *ctx)
   if (ctx == NULL)
     return -EBADF;
 
-  if (ctx->maint_window_start != NULL)
-    calendar_spec_free (ctx->maint_window_start);
+  calendar_spec_free (ctx->maint_window_start);
   free (ctx);
 
   return 0;
