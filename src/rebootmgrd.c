@@ -878,9 +878,12 @@ main (int argc, char **argv)
     log_msg (LOG_INFO, "Starting rebootmgrd (%s) %s...", PACKAGE, VERSION);
 
   r = run_varlink (ctx);
+  if (r < 0)
+    log_msg (LOG_ERR, "ERROR: varlink loop failed: %s", strerror (-r));
 
-  if (!destroy_context (ctx))
-    log_msg (LOG_ERR, "ERROR: Could not destroy context");
+  r = destroy_context (ctx);
+  if (r < 0)
+    log_msg (LOG_ERR, "ERROR: Could not destroy context: %i", r);
 
   return -r;
 }
