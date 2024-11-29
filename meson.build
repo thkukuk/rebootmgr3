@@ -11,7 +11,7 @@ project(
 		  'b_pie=true',
                   'b_lto=true',
                   'c_std=gnu23',
-		  'warning_level=3',],
+		  'warning_level=2',],
   license : ['GPL-2.0-only', 'LGPL-2.1-or-later'],
   version : '3.0',
 )
@@ -68,7 +68,8 @@ libsystemd = dependency('libsystemd', version : '>=257')
 libcalendarspec_c = ['lib/calendarspec.c', 'lib/parse-duration.c',
 		  'lib/time-util.c']
 
-rebootmgrctl_c = ['src/rebootmgrctl.c', 'src/util.c']
+rebootmgrctl_c = ['src/rebootmgrctl.c', 'src/util.c', 'src/config_file.c',
+                  'src/log_msg.c']
 rebootmgrd_c = ['src/rebootmgrd.c', 'src/log_msg.c', 'src/config_file.c',
 	     'src/util.c']
 
@@ -81,6 +82,7 @@ executable('rebootmgrctl',
            rebootmgrctl_c,
            include_directories : inc,
            dependencies : [libeconf, libsystemd],
+           link_with : [libcalendarspec_a],
            install : true,
 	   install_dir: bindir)
 

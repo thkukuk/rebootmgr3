@@ -27,6 +27,8 @@
 
 #include "rebootmgr.h"
 #include "util.h"
+#include "config_file.h"
+#include "log_msg.h"
 
 #ifndef _
 #define _(String) gettext(String)
@@ -46,16 +48,16 @@
 #define TAKE_PTR(ptr) TAKE_PTR_TYPE(ptr, typeof(ptr))
 
 static int
-connect_to_rebootmgr (sd_varlink **ret)
+connect_to_rebootmgr(sd_varlink **ret)
 {
   _cleanup_(sd_varlink_unrefp) sd_varlink *link = NULL;
   int r;
 
-  r = sd_varlink_connect_address (&link, RM_VARLINK_SOCKET);
+  r = sd_varlink_connect_address(&link, RM_VARLINK_SOCKET);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to connect to " RM_VARLINK_SOCKET ": %s",
-	       strerror (-r));
+      fprintf(stderr, "Failed to connect to " RM_VARLINK_SOCKET ": %s",
+	       strerror(-r));
       return r;
     }
 
@@ -64,7 +66,7 @@ connect_to_rebootmgr (sd_varlink **ret)
 }
 
 static int
-trigger_reboot (RM_RebootMethod method, bool forced)
+trigger_reboot(RM_RebootMethod method, bool forced)
 {
   struct p {
     int reboot_method;
@@ -83,16 +85,16 @@ trigger_reboot (RM_RebootMethod method, bool forced)
   sd_json_variant *result;
   int r;
 
-  r = connect_to_rebootmgr (&link);
+  r = connect_to_rebootmgr(&link);
   if (r < 0)
     return r;
 
-  r = sd_json_buildo (&params,
-		      SD_JSON_BUILD_PAIR("Reboot", SD_JSON_BUILD_INTEGER(method)),
-		      SD_JSON_BUILD_PAIR("Force", SD_JSON_BUILD_BOOLEAN(forced)));
+  r = sd_json_buildo(&params,
+		     SD_JSON_BUILD_PAIR("Reboot", SD_JSON_BUILD_INTEGER(method)),
+		     SD_JSON_BUILD_PAIR("Force", SD_JSON_BUILD_BOOLEAN(forced)));
   if (r < 0)
     {
-      fprintf (stderr, "Failed to build JSON data: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to build JSON data: %s\n", strerror(-r));
       return r;
     }
 
@@ -100,44 +102,44 @@ trigger_reboot (RM_RebootMethod method, bool forced)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.Reboot", params, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call reboot method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call reboot method: %s\n", strerror(-r));
       return r;
     }
 
   /* dispatch before checking error_id, we may need the result for the error
      message */
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
   const char *method_str = NULL;
-  r = rm_method_to_str (p.reboot_method, &method_str);
+  r = rm_method_to_str(p.reboot_method, &method_str);
   if (r < 0)
     method_str = _("unknown reboot");
 
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      if (strcmp (error_id, "org.openSUSE.rebootmgr.AlreadyInProgress") == 0)
-	printf (_("A %s is already scheduled for %s, ignoring new request\n"),
+      if (strcmp(error_id, "org.openSUSE.rebootmgr.AlreadyInProgress") == 0)
+	printf(_("A %s is already scheduled for %s, ignoring new request\n"),
 		method_str, p.reboot_time);
       else
-	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
 
-      free (p.reboot_time);
+      free(p.reboot_time);
       return -1;
     }
 
-  printf (_("The %s got scheduled for %s\n"),  method_str, p.reboot_time);
+  printf(_("The %s got scheduled for %s\n"),  method_str, p.reboot_time);
 
-  free (p.reboot_time);
+  free(p.reboot_time);
   return 0;
 }
 
 static int
-cancel_reboot (void)
+cancel_reboot(void)
 {
   struct p {
     bool success;
@@ -152,7 +154,7 @@ cancel_reboot (void)
   sd_json_variant *result;
   int r;
 
-  r = connect_to_rebootmgr (&link);
+  r = connect_to_rebootmgr(&link);
   if (r < 0)
     return r;
 
@@ -160,35 +162,35 @@ cancel_reboot (void)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.Cancel", NULL, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call cancel method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call cancel method: %s\n", strerror(-r));
       return r;
     }
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      if (strcmp (error_id, "org.openSUSE.rebootmgr.NoRebootScheduled") == 0)
-	printf (_("There is no reboot scheduled which can be canceld\n"));
+      if (strcmp(error_id, "org.openSUSE.rebootmgr.NoRebootScheduled") == 0)
+	printf(_("There is no reboot scheduled which can be canceld\n"));
       else
-	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
     }
 
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
   if (p.success == true)
-    printf (_("Request to cancel reboot was successful\n"));
+    printf(_("Request to cancel reboot was successful\n"));
   else
-    printf (_("Request to cancel reboot failed\n"));
+    printf(_("Request to cancel reboot failed\n"));
 
   return 0;
 }
 
 static int
-set_strategy (RM_RebootStrategy strategy)
+set_strategy(RM_RebootStrategy strategy)
 {
   struct p {
     bool success;
@@ -204,15 +206,15 @@ set_strategy (RM_RebootStrategy strategy)
   sd_json_variant *result;
   int r;
 
-  r = connect_to_rebootmgr (&link);
+  r = connect_to_rebootmgr(&link);
   if (r < 0)
     return r;
 
-  r = sd_json_buildo (&params,
-		      SD_JSON_BUILD_PAIR("Strategy", SD_JSON_BUILD_INTEGER(strategy)));
+  r = sd_json_buildo(&params,
+		     SD_JSON_BUILD_PAIR("Strategy", SD_JSON_BUILD_INTEGER(strategy)));
   if (r < 0)
     {
-      fprintf (stderr, "Failed to build JSON data: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to build JSON data: %s\n", strerror(-r));
       return r;
     }
 
@@ -220,36 +222,36 @@ set_strategy (RM_RebootStrategy strategy)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetStrategy", params, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call SetStrategy method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call SetStrategy method: %s\n", strerror(-r));
       return r;
     }
 
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      if (strcmp (error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
-	printf (_("Strategy '%i' got rejected as invalid\n"), strategy);
+      if (strcmp(error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
+	printf(_("Strategy '%i' got rejected as invalid\n"), strategy);
       else
-	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
     }
 
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
   if (p.success == true)
-    printf (_("Request to set new strategy was successful\n"));
+    printf(_("Request to set new strategy was successful\n"));
   else
-    printf (_("Request to set new strategy failed\n"));
+    printf(_("Request to set new strategy failed\n"));
 
   return 0;
 }
 
 static int
-set_window (const char *start, const char *duration)
+set_window(const char *start, const char *duration)
 {
   struct p {
     char *variable;
@@ -268,16 +270,16 @@ set_window (const char *start, const char *duration)
   sd_json_variant *result;
   int r;
 
-  r = connect_to_rebootmgr (&link);
+  r = connect_to_rebootmgr(&link);
   if (r < 0)
     return r;
 
-  r = sd_json_buildo (&params,
-		      SD_JSON_BUILD_PAIR("Start", SD_JSON_BUILD_STRING(start)),
-  		      SD_JSON_BUILD_PAIR("Duration", SD_JSON_BUILD_STRING(duration)));
+  r = sd_json_buildo(&params,
+		     SD_JSON_BUILD_PAIR("Start", SD_JSON_BUILD_STRING(start)),
+		     SD_JSON_BUILD_PAIR("Duration", SD_JSON_BUILD_STRING(duration)));
   if (r < 0)
     {
-      fprintf (stderr, "Failed to build JSON data: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to build JSON data: %s\n", strerror(-r));
       return r;
     }
 
@@ -285,42 +287,42 @@ set_window (const char *start, const char *duration)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetWindow", params, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call SetWindow method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call SetWindow method: %s\n", strerror(-r));
       return r;
     }
 
   /* dispatch before checking error_id, we may need the result for the error
      message */
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      if (strcmp (error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
-	printf (_("New maintenance window got rejected as invalid (%s)\n"),
+      if (strcmp(error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
+	printf(_("New maintenance window got rejected as invalid (%s)\n"),
 		p.variable);
       else
-	fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
-      free (p.variable);
+	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      free(p.variable);
       return -1;
     }
 
   if (p.success == true)
-    printf (_("Request to set new maintenance window was successful\n"));
+    printf(_("Request to set new maintenance window was successful\n"));
   else
-    printf (_("Request to set new maintenance window failed\n"));
+    printf(_("Request to set new maintenance window failed\n"));
 
-  free (p.variable);
+  free(p.variable);
 
   return 0;
 }
 
 static int
-get_status (RM_RebootStatus *status, RM_RebootMethod *method, char **reboot_time)
+get_status(RM_RebootStatus *status, RM_RebootMethod *method, char **reboot_time)
 {
   struct p {
     RM_RebootStatus status;
@@ -349,19 +351,19 @@ get_status (RM_RebootStatus *status, RM_RebootMethod *method, char **reboot_time
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.Status", NULL, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call status method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call status method: %s\n", strerror(-r));
       return r;
     }
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
     }
 
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, &p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
@@ -383,14 +385,14 @@ struct status {
 };
 
 static void
-struct_status_free (struct status *p)
+struct_status_free(struct status *p)
 {
-  p->maint_window_start = mfree (p->maint_window_start);
-  p->reboot_time = mfree (p->reboot_time);
+  p->maint_window_start = mfree(p->maint_window_start);
+  p->reboot_time = mfree(p->reboot_time);
 }
 
 static int
-get_full_status (struct status *p)
+get_full_status(struct status *p)
 {
   static const sd_json_dispatch_field dispatch_table[] = {
     { "RebootStatus",              SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct status, status),                SD_JSON_MANDATORY },
@@ -405,7 +407,7 @@ get_full_status (struct status *p)
   sd_json_variant *result;
   int r;
 
-  r = connect_to_rebootmgr (&link);
+  r = connect_to_rebootmgr(&link);
   if (r < 0)
     return r;
 
@@ -413,19 +415,19 @@ get_full_status (struct status *p)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.FullStatus", NULL, &result, &error_id);
   if (r < 0)
     {
-      fprintf (stderr, "Failed to call status method: %s\n", strerror (-r));
+      fprintf(stderr, "Failed to call status method: %s\n", strerror(-r));
       return r;
     }
-  if (error_id && strlen (error_id) > 0)
+  if (error_id && strlen(error_id) > 0)
     {
-      fprintf (stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
+      fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
     }
 
-  r = sd_json_dispatch (result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, p);
+  r = sd_json_dispatch(result, dispatch_table, SD_JSON_ALLOW_EXTENSIONS, p);
   if (r < 0)
     {
-      fprintf (stderr, _("Failed to parse JSON answer: %s\n"), strerror (-r));
+      fprintf(stderr, _("Failed to parse JSON answer: %s\n"), strerror(-r));
       return r;
     }
 
@@ -433,7 +435,7 @@ get_full_status (struct status *p)
 }
 
 static int
-print_full_status (void)
+print_full_status(void)
 {
   _cleanup_(struct_status_free) struct status status = {
     .status = RM_REBOOTSTATUS_NOT_REQUESTED,
@@ -446,121 +448,172 @@ print_full_status (void)
   const char *str = NULL;
   int r;
 
-  r = get_full_status (&status);
+  r = get_full_status(&status);
   if (r < 0)
     return r;
 
-  r = rm_status_to_str (status.status, status.method, &str);
+  r = rm_status_to_str(status.status, status.method, &str);
   if (r < 0)
     {
-      fprintf (stderr, "Converting status to string failed: %s\n", strerror (-r));
+      fprintf(stderr, "Converting status to string failed: %s\n", strerror(-r));
       return -1;
     }
   else
-    printf ("Status: %s\n", str);
+    printf("Status: %s\n", str);
 
-  if (status.reboot_time && strlen (status.reboot_time) > 0)
-    printf ("Reboot at: %s\n", status.reboot_time);
+  if (status.reboot_time && strlen(status.reboot_time) > 0)
+    printf("Reboot at: %s\n", status.reboot_time);
 
-  r = rm_strategy_to_str (status.strategy, &str);
+  r = rm_strategy_to_str(status.strategy, &str);
   if (r < 0)
     {
-      fprintf (stderr, "Converting strategy to string failed: %s\n", strerror (-r));
+      fprintf(stderr, "Converting strategy to string failed: %s\n", strerror(-r));
       return -1;
     }
   else
-    printf ("Strategy: %s\n", str);
+    printf("Strategy: %s\n", str);
 
   if (status.maint_window_start)
     {
       _cleanup_(freep) const char *duration_str;
 
-      r = rm_duration_to_string (status.maint_window_duration, &duration_str);
+      r = rm_duration_to_string(status.maint_window_duration, &duration_str);
       if (r < 0)
 	{
-	  fprintf (stderr, _("Error converting duration to string: %s\n"),
-		   strerror (-r));
+	  fprintf(stderr, _("Error converting duration to string: %s\n"),
+		   strerror(-r));
 	  return r;
 	}
 
-      printf ("Start of maintenance window: %s\n", status.maint_window_start);
-      printf ("Duration of maintenance window: %s\n", duration_str);
+      printf("Start of maintenance window: %s\n", status.maint_window_start);
+      printf("Duration of maintenance window: %s\n", duration_str);
     }
 
   return 0;
 }
 
-static void
-usage (int exit_code)
+static int
+dump_config(void)
 {
-  printf (_("Usage:\n"));
-  printf (_("\trebootmgrctl --help|--version\n"));
-  printf (_("\trebootmgrctl is-active [--quiet]\n"));
-  printf (_("\trebootmgrctl reboot [now]\n"));
-  printf (_("\trebootmgrctl soft-reboot [now]\n"));
-  printf (_("\trebootmgrctl cancel\n"));
-  printf (_("\trebootmgrctl status [--full|--quiet]\n"));
-  printf (_("\trebootmgrctl set-strategy best-effort|maint-window|instantly|off\n"));
-  printf (_("\trebootmgrctl get-strategy\n"));
-  printf (_("\trebootmgrctl set-window <time> <duration>\n"));
-  printf (_("\trebootmgrctl get-window\n"));
-  exit (exit_code);
+  _cleanup_(freep) char *start_str = NULL;
+  _cleanup_(freep) const char *duration_str = NULL;
+  const char *strategy_str = NULL;
+  RM_CTX ctx;
+  int r;
+
+  /* XXX make this more elegant and share initialization
+     with rebootmgrd */
+  ctx.reboot_strategy = RM_REBOOTSTRATEGY_BEST_EFFORT;
+  ctx.maint_window_duration = 3600;
+  calendar_spec_from_string("03:30", &ctx.maint_window_start);
+
+  log_init();
+
+  r = load_config (&ctx);
+  if (r < 0)
+    return -r;
+
+  r = rm_strategy_to_str(ctx.reboot_strategy, &strategy_str);
+  if (r < 0)
+    {
+      fprintf(stderr, _("Converting strategy to string failed: %s\n"), strerror(-r));
+      return -1;
+    }
+
+  r = calendar_spec_to_string(ctx.maint_window_start, &start_str);
+  if (r < 0)
+    {
+      fprintf(stderr, _("Converting calendar entry to string failed: %s\n"), strerror(-r));
+      return -1;
+    }
+  r = rm_duration_to_string(ctx.maint_window_duration, &duration_str);
+  if (r < 0)
+    {
+      fprintf(stderr, _("Error converting duration to string: %s\n"), strerror(-r));
+      return -1;
+    }
+
+  printf ("strategy: %s\n", strategy_str);
+  printf ("window-start: %s\n", start_str);
+  printf ("window-duration: %s\n", duration_str);
+
+  calendar_spec_free (ctx.maint_window_start);
+
+  return 0;
+}
+
+static void
+usage(int exit_code)
+{
+  printf(_("Usage:\n"));
+  printf(_("\trebootmgrctl --help|--version\n"));
+  printf(_("\trebootmgrctl is-active [--quiet]\n"));
+  printf(_("\trebootmgrctl reboot [now]\n"));
+  printf(_("\trebootmgrctl soft-reboot [now]\n"));
+  printf(_("\trebootmgrctl cancel\n"));
+  printf(_("\trebootmgrctl status [--full|--quiet]\n"));
+  printf(_("\trebootmgrctl set-strategy best-effort|maint-window|instantly|off\n"));
+  printf(_("\trebootmgrctl get-strategy\n"));
+  printf(_("\trebootmgrctl set-window <time> <duration>\n"));
+  printf(_("\trebootmgrctl get-window\n"));
+  printf(_("\trebootmgrctl dump-config\n"));
+  exit(exit_code);
 }
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
   int retval = 0;
 
-  setlocale (LC_MESSAGES, "");
-  setlocale (LC_CTYPE, "");
-  bindtextdomain (PACKAGE, LOCALEDIR);
-  textdomain (PACKAGE);
+  setlocale(LC_MESSAGES, "");
+  setlocale(LC_CTYPE, "");
+  bindtextdomain(PACKAGE, LOCALEDIR);
+  textdomain(PACKAGE);
 
   if (argc < 2)
-    usage (1);
+    usage(1);
   else if (argc == 2)
     {
       /* Parse commandline for help or version */
-      if (strcmp ("--version", argv[1]) == 0)
+      if (strcmp("--version", argv[1]) == 0)
         {
-          fprintf (stdout, _("rebootmgrctl (%s) %s\n"), PACKAGE, VERSION);
-          exit (0);
+          fprintf(stdout, _("rebootmgrctl (%s) %s\n"), PACKAGE, VERSION);
+          exit(0);
         }
-      else if (strcmp ("--help", argv[1]) == 0)
-	usage (0);
+      else if (strcmp("--help", argv[1]) == 0)
+	usage(0);
     }
 
   /* Continue parsing commandline. */
-  if (strcasecmp ("reboot", argv[1]) == 0)
+  if (strcasecmp("reboot", argv[1]) == 0)
     {
       RM_RebootMethod method = RM_REBOOTMETHOD_HARD;
       bool force = false;
 
       if (argc > 2)
 	{
-	  if (strcasecmp ("now", argv[2]) == 0)
+	  if (strcasecmp("now", argv[2]) == 0)
 	    force = true;
 	  else
-	    usage (1);
+	    usage(1);
 	}
-      retval = trigger_reboot (method, force);
+      retval = trigger_reboot(method, force);
     }
-  else if (strcasecmp ("soft-reboot", argv[1]) == 0)
+  else if (strcasecmp("soft-reboot", argv[1]) == 0)
     {
       RM_RebootMethod method = RM_REBOOTMETHOD_SOFT;
       bool force = false;
 
       if (argc > 2)
 	{
-	  if (strcasecmp ("now", argv[2]) == 0)
+	  if (strcasecmp("now", argv[2]) == 0)
 	    force = true;
 	  else
-	    usage (1);
+	    usage(1);
 	}
-      retval = trigger_reboot (method, force);
+      retval = trigger_reboot(method, force);
     }
-  else if (strcasecmp ("status", argv[1]) == 0)
+  else if (strcasecmp("status", argv[1]) == 0)
     {
       int quiet = 0;
       int full = 0;
@@ -570,25 +623,25 @@ main (int argc, char **argv)
 
       if (argc == 3)
 	{
-	  if (strcasecmp ("-q", argv[2]) == 0 ||
-	      strcasecmp ("--quiet", argv[2]) == 0)
+	  if (strcasecmp("-q", argv[2]) == 0 ||
+	      strcasecmp("--quiet", argv[2]) == 0)
 	    quiet = 1;
-	  if (strcasecmp ("-f", argv[2]) == 0 ||
-	      strcasecmp ("--full", argv[2]) == 0)
+	  if (strcasecmp("-f", argv[2]) == 0 ||
+	      strcasecmp("--full", argv[2]) == 0)
 	    full = 1;
 	}
       else if (argc > 3)
-	usage (1);
+	usage(1);
 
       if (full)
 	{
-	  int r = print_full_status ();
+	  int r = print_full_status();
 	  if (r < 0)
 	    retval = 1;
 	}
       else
 	{
-	  int r = get_status (&r_status, &r_method, &r_time);
+	  int r = get_status(&r_status, &r_method, &r_time);
 	  if (r < 0)
 	    retval = 1;
 	  else if (quiet)
@@ -599,89 +652,89 @@ main (int argc, char **argv)
 		{
 		  const char *str;
 
-		  r = rm_status_to_str (r_status, r_method, &str);
+		  r = rm_status_to_str(r_status, r_method, &str);
 		  if (r < 0)
 		    {
-		      fprintf (stderr, "Converting status to string failed: %s\n",
-			       strerror (-r));
+		      fprintf(stderr, "Converting status to string failed: %s\n",
+			      strerror(-r));
 		      retval = 1;
 		    }
 		  else
-		    printf ("Status: %s\n", str);
+		    printf("Status: %s\n", str);
 		}
 	      else
 		retval = 1;
 	    }
 	}
     }
-  else if (strcasecmp ("is-active", argv[1]) == 0)
+  else if (strcasecmp("is-active", argv[1]) == 0)
     {
       int quiet = 0;
       RM_RebootStatus r_status = 0;
       RM_RebootMethod r_method = 0;
 
       if (argc > 2)
-	if (strcasecmp ("-q", argv[2]) == 0 ||
-	    strcasecmp ("--quiet", argv[2]) == 0)
+	if (strcasecmp("-q", argv[2]) == 0 ||
+	    strcasecmp("--quiet", argv[2]) == 0)
 	  quiet = 1;
 
       /* if we get an answer to a status request, rebootmgrd
 	 must be active */
-      int r = get_status (&r_status, &r_method, NULL);
+      int r = get_status(&r_status, &r_method, NULL);
       if (r == 0)
 	{
 	  if (quiet)
 	    retval = 0;
 	  else
-	    printf ("RebootMgr is active\n");
+	    printf("RebootMgr is active\n");
 	}
       else
 	{
 	  if (quiet)
 	    retval = 1;
 	  else
-	    printf ("RebootMgr is not running\n");
+	    printf("RebootMgr is not running\n");
 	}
     }
-  else if (strcasecmp ("set-strategy", argv[1]) == 0)
+  else if (strcasecmp("set-strategy", argv[1]) == 0)
     {
       RM_RebootStrategy strategy = RM_REBOOTSTRATEGY_BEST_EFFORT;
 
       if (argc > 2)
     	{
-	  int r = rm_string_to_strategy (argv[2], &strategy);
+	  int r = rm_string_to_strategy(argv[2], &strategy);
 	  if (r < 0)
 	    usage(1);
-	  retval = set_strategy (strategy);
+	  retval = set_strategy(strategy);
 	}
       else
 	usage(1);
     }
-  else if (strcasecmp ("get-strategy", argv[1]) == 0)
+  else if (strcasecmp("get-strategy", argv[1]) == 0)
     {
       struct status status = {
 	.strategy = RM_REBOOTSTRATEGY_UNKNOWN,
       };
       int r;
 
-      r = get_full_status (&status);
+      r = get_full_status(&status);
       if (r < 0)
 	retval = 1;
       else
 	{
 	  const char *str = NULL;
 
-	  r = rm_strategy_to_str (status.strategy, &str);
+	  r = rm_strategy_to_str(status.strategy, &str);
 	  if (r < 0)
 	    {
-	      printf (_("Internal error, returned strategy is: %d\n"), status.strategy);
+	      printf(_("Internal error, returned strategy is: %d\n"), status.strategy);
 	      retval = 1;
 	    }
 	  else
-	    printf (_("Reboot strategy: %s\n"), str);
+	    printf(_("Reboot strategy: %s\n"), str);
 	}
     }
-  else if (strcasecmp ("get-window", argv[1]) == 0)
+  else if (strcasecmp("get-window", argv[1]) == 0)
     {
       struct status status = {
 	.maint_window_start = NULL,
@@ -689,37 +742,37 @@ main (int argc, char **argv)
       };
       int r;
 
-      r = get_full_status (&status);
+      r = get_full_status(&status);
       if (r < 0)
 	retval = 1;
       else
 	{
 	  _cleanup_(freep) const char *duration_str = NULL;
-	  r = rm_duration_to_string (status.maint_window_duration, &duration_str);
+	  r = rm_duration_to_string(status.maint_window_duration, &duration_str);
 	  if (r < 0)
 	    {
-	      fprintf (stderr, _("Error converting duration to string: %s\n"),
-		       strerror (-r));
+	      fprintf(stderr, _("Error converting duration to string: %s\n"),
+		      strerror(-r));
 	      retval = 1;
 	    }
 	  else
-	    printf (_("Maintenance window is set to '%s', lasting %s.\n"),
-		    status.maint_window_start, duration_str);
+	    printf(_("Maintenance window is set to '%s', lasting %s.\n"),
+		   status.maint_window_start, duration_str);
 	}
     }
-  else if (strcasecmp ("set-window", argv[1]) == 0)
+  else if (strcasecmp("set-window", argv[1]) == 0)
     {
       if (argc == 4)
-	retval = set_window (argv[2], argv[3]);
+	retval = set_window(argv[2], argv[3]);
       else
-	usage (1);
+	usage(1);
     }
-  else if (strcasecmp ("cancel", argv[1]) == 0)
-    {
-      retval = cancel_reboot ();
-    }
+  else if (strcasecmp("cancel", argv[1]) == 0)
+    retval = cancel_reboot();
+  else if (strcasecmp("dump-config", argv[1]) == 0)
+    retval = dump_config();
   else
-    usage (1);
+    usage(1);
 
   return retval;
 }
