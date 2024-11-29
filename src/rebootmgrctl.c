@@ -230,6 +230,8 @@ set_strategy(RM_RebootStrategy strategy)
     {
       if (strcmp(error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
 	printf(_("Strategy '%i' got rejected as invalid\n"), strategy);
+      else if (strcmp(error_id, "org.openSUSE.rebootmgr.ErrorWritingConfig") == 0)
+	printf(_("Updating configuration file failed\n"));
       else
 	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       return -1;
@@ -305,6 +307,8 @@ set_window(const char *start, const char *duration)
       if (strcmp(error_id, "org.openSUSE.rebootmgr.InvalidParameter") == 0)
 	printf(_("New maintenance window got rejected as invalid (%s)\n"),
 		p.variable);
+      else if (strcmp(error_id, "org.openSUSE.rebootmgr.ErrorWritingConfig") == 0)
+	printf(_("Updating configuration file failed\n"));
       else
 	fprintf(stderr, _("Calling rebootmgrd failed: %s\n"), error_id);
       free(p.variable);
