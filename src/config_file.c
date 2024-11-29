@@ -18,6 +18,7 @@
 
 #include "config.h"
 
+#include <errno.h>
 #include <string.h>
 #include <libeconf.h>
 
@@ -28,11 +29,22 @@
 #include "util.h"
 
 #define RM_GROUP "rebootmgr"
+#define RM_DROPIN_DIR "/etc/rebootmgr/rebootmgr.conf.d"
+
+static econf_err
+open_config_file(econf_file **key_file)
+{
+  return econf_readConfig(key_file,
+			  PACKAGE,
+			  CONFIGDIR,
+			  "rebootmgr",
+			  "conf", "=", "#");
+}
 
 static void
-econf_freeFilep (econf_file **key_file)
+econf_freeFilep(econf_file **key_file)
 {
-  econf_freeFile (*key_file);
+  econf_freeFile(*key_file);
   *key_file = NULL;
 }
 
@@ -42,11 +54,7 @@ load_config (RM_CTX *ctx)
   _cleanup_(econf_freeFilep) econf_file *key_file = NULL;
   econf_err error;
 
-  error = econf_readConfig (&key_file,
-                            "rebootmgr",
-                            "/usr/share",
-                            "rebootmgrd",
-                            "conf", "=", "#");
+  error = open_config_file (&key_file);
   if (error)
     {
       /* ignore if there is no configuration file at all */
@@ -109,70 +117,78 @@ load_config (RM_CTX *ctx)
   return 0;
 }
 
-
-/* XXX mark modified variables and write them into reboogmgrd.conf.d directories */
-void
-save_config (RM_CTX *ctx, int field)
+int
+save_config(RM_CTX *ctx, int field)
 {
-#if 0 /* XXX needs a complete rewrite */
-  econf_file *file = NULL;
+  const char *dropin = NULL;
+  _cleanup_(econf_freeFilep) econf_file *key_file = NULL;
   econf_err error;
+  int r;
 
-  error = econf_readFile (&file, SYSCONFDIR"/rebootmgr.conf", "=", "#");
-  if (error)
+  if ((error = econf_newKeyFile(&key_file, '=', '#')))
     {
-      if (error != ECONF_NOFILE)
-	{
-	  log_msg (LOG_ERR, "Cannot load '"SYSCONFDIR"rebootmgr.conf': %s",
-		   econf_errString(error));
-	  return;
-	}
-      else
-	{
-	  if ((error = econf_newKeyFile (&file, '=', '#')))
-	    {
-	      log_msg (LOG_ERR, "Cannot create new config file: %s",
-		       econf_errString(error));
-	      return;
-	    }
-	}
+      log_msg (LOG_ERR, "Cannot create new config file: %s",
+	       econf_errString(error));
+      return -1;
     }
 
-  switch (field)
+  switch(field)
     {
-      char *p;
     case SET_STRATEGY:
-      error = econf_setStringValue (file, RM_GROUP, "strategy",
-				    strategy_to_string(ctx->reboot_strategy, NULL));
+      const char *strategy_str = NULL;
+
+      dropin = "50-strategy.conf";
+      r = rm_strategy_to_str(ctx->reboot_strategy, &strategy_str);
+      if (r < 0)
+	{
+	  log_msg(LOG_ERR, "Converting strategy to string failed: %s", strerror(-r));
+	  return -1;
+	}
+      error = econf_setStringValue (key_file, RM_GROUP, "strategy", strategy_str);
       break;
     case SET_MAINT_WINDOW:
-      p = spec_to_string(ctx->maint_window_start);
-      error = econf_setStringValue (file, RM_GROUP, "window-start", p);
-      free (p);
-      if (!error)
-	{
-	  p = duration_to_string(ctx->maint_window_duration);
-	  error = econf_setStringValue (file, RM_GROUP, "window-duration", p);
-	  free (p);
-	}
+      {
+	_cleanup_(freep) char *start_str = NULL;
+	_cleanup_(freep) const char *duration_str = NULL;
+
+	dropin = "50-maintenance-window.conf";
+        r = calendar_spec_to_string(ctx->maint_window_start, &start_str);
+	if (r < 0)
+	  {
+	    log_msg(LOG_ERR, "Converting calendar entry to string failed: %s", strerror(-r));
+	    return -1;
+	  }
+
+	error = econf_setStringValue(key_file, RM_GROUP, "window-start", start_str);
+	if (!error)
+	  {
+	    r = rm_duration_to_string(ctx->maint_window_duration, &duration_str);
+	    if (r < 0)
+	      {
+		log_msg(LOG_ERR, "Error converting duration to string: %s", strerror(-r));
+		return -1;
+	      }
+	    error = econf_setStringValue(key_file, RM_GROUP, "window-duration", duration_str);
+	  }
+      }
       break;
     default:
-      log_msg (LOG_ERR, "Error writing config file, unknown field %i", field);
-      econf_free (file);
-      return;
+      log_msg(LOG_ERR, "Error writing config file, unknown field %i", field);
+      return -EINVAL;
     }
 
   if (error)
     {
       log_msg (LOG_ERR, "Error setting variable: %s\n", econf_errString(error));
-      econf_free (file);
-      return;
+      econf_free (key_file);
+      return -1;
     }
 
-  if ((error = econf_writeFile(file, SYSCONFDIR"/", "rebootmgr.conf")))
-    log_msg (LOG_ERR, "Error writing "SYSCONFDIR"/rebootmgr.conf: %s",
-	     econf_errString(error));
+  if ((error = econf_writeFile(key_file, RM_DROPIN_DIR, dropin)))
+    {
+      log_msg(LOG_ERR, "Error writing '"RM_DROPIN_DIR"/%s': %s", dropin, econf_errString(error));
+      return -1;
+    }
 
-  econf_free (file);
-#endif
+  return 0;
 }

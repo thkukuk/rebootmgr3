@@ -21,4 +21,4 @@
 #define SET_MAINT_WINDOW 2
 
 int load_config (RM_CTX *ctx);
-void save_config (RM_CTX *ctx, int field);
+int save_config (RM_CTX *ctx, int field);
