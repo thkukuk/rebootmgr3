@@ -60,6 +60,7 @@ sbindir = join_paths(prefixdir, get_option('sbindir'))
 libexecdir = join_paths(prefixdir, get_option('libexecdir'))
 sysconfdir = join_paths('/', get_option('sysconfdir'))
 mandir = join_paths(prefixdir, get_option('mandir'))
+datadir = join_paths(prefixdir, get_option('datadir'))
 configdir = join_paths(prefixdir, get_option('datadir'), meson.project_name())
 
 libeconf = dependency('libeconf', version : '>=0.7.4')
@@ -106,6 +107,7 @@ conf.set_quoted('VERSION', meson.project_version())
 conf.set_quoted('PACKAGE', meson.project_name())
 conf.set_quoted('LOCALEDIR', localedir)
 conf.set_quoted('SYSCONFDIR', sysconfdir)
+conf.set_quoted('DATADIR', datadir)
 conf.set_quoted('CONFIGDIR', configdir)
 
 config_h = configure_file(
