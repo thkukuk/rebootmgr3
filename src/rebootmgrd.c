@@ -88,6 +88,7 @@ static SD_VARLINK_DEFINE_METHOD(
 static SD_VARLINK_DEFINE_ERROR(InvalidParameter);
 static SD_VARLINK_DEFINE_ERROR(AlreadyInProgress);
 static SD_VARLINK_DEFINE_ERROR(NoRebootScheduled);
+static SD_VARLINK_DEFINE_ERROR(ErrorWritingConfig);
 
 SD_VARLINK_DEFINE_INTERFACE(
                 org_openSUSE_rebootmgr,
@@ -112,7 +113,9 @@ SD_VARLINK_DEFINE_INTERFACE(
 		SD_VARLINK_SYMBOL_COMMENT("A reboot is already requested"),
                 &vl_error_AlreadyInProgress,
                 SD_VARLINK_SYMBOL_COMMENT("No Reboot was scheduled"),
-                &vl_error_NoRebootScheduled);
+                &vl_error_NoRebootScheduled,
+		SD_VARLINK_SYMBOL_COMMENT("Writing new values in configuration file failed"),
+		&vl_error_ErrorWritingConfig);
 
 static int
 vl_method_status (sd_varlink *link, sd_json_variant *parameters,
@@ -260,11 +263,11 @@ calc_reboot_time (RM_CTX *ctx, usec_t *ret)
 }
 
 static int
-time_handler (sd_event_source _unused_(*s), uint64_t usec, void *userdata)
+time_handler (sd_event_source _unused_(*s), uint64_t _unused_(usec), void *userdata)
 {
   RM_CTX *ctx = userdata;
 
-  log_msg (LOG_DEBUG, "time_handler called (%i|%i)", usec, ctx->reboot_time);
+  log_msg (LOG_DEBUG, "time_handler called");
 
   if (ctx->temp_off)
     {
@@ -479,16 +482,25 @@ vl_method_set_strategy (sd_varlink *link, sd_json_variant *parameters,
       const char *str;
 
       ctx->reboot_strategy = p.strategy;
-      save_config (ctx, SET_STRATEGY);
+
+      /* Don't save strategy off */
+      if (p.strategy != RM_REBOOTSTRATEGY_OFF)
+	{
+	  r = save_config (ctx, SET_STRATEGY);
+	  if (r < 0)
+	    {
+	      log_msg (LOG_ERR, "Saving new reboot strategy failed");
+	      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
+					 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+	    }
+	}
 
       rm_strategy_to_str (p.strategy, &str);
       log_msg (LOG_INFO, "Reboot strategy changed to '%s'", str);
-      ctx->reboot_strategy = p.strategy;
-      save_config (ctx, SET_STRATEGY);
     }
   else
     {
-      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value (%i)", p.strategy);
+      log_msg (LOG_ERR, "Reboot strategy not changed, invalid value (%i)", p.strategy);
       return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
 				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
@@ -496,21 +508,33 @@ vl_method_set_strategy (sd_varlink *link, sd_json_variant *parameters,
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
 
+
+struct set_window {
+  char *start;
+  char *duration;
+};
+
+static void
+set_window_free (struct set_window *var)
+{
+  free(var->start);
+  var->start = NULL;
+  free(var->duration);
+  var->duration = NULL;
+}
+
 static int
 vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
 		      sd_varlink_method_flags_t _unused_(flags),
 		      void *userdata)
 {
-  struct p {
-    char *start;
-    char *duration;
-  } p = {
+  _cleanup_(set_window_free) struct set_window p = {
     .start = NULL,
     .duration = NULL
   };
   static const sd_json_dispatch_field dispatch_table[] = {
-    { "Start",    SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct p, start), SD_JSON_MANDATORY },
-    { "Duration", SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct p, duration), SD_JSON_MANDATORY },
+    { "Start",    SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct set_window, start), SD_JSON_MANDATORY },
+    { "Duration", SD_JSON_VARIANT_STRING, sd_json_dispatch_string, offsetof(struct set_window, duration), SD_JSON_MANDATORY },
     {}
   };
   RM_CTX *ctx = userdata;
@@ -526,18 +550,25 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
+  CalendarSpec *new_start;
   if (p.start == NULL || strlen (p.start) == 0 ||
-      calendar_spec_from_string (p.start, &ctx->maint_window_start) < 0)
+      calendar_spec_from_string (p.start, &new_start) < 0)
     {
-      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value for window start (%s)", p.start);
-      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
-				 SD_JSON_BUILD_PAIR_STRING("Variable", "start time"),
-				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+      log_msg(LOG_ERR, "Reboot strategy not changed, invalid value for window start (%s)", p.start);
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.InvalidParameter",
+				SD_JSON_BUILD_PAIR_STRING("Variable", "start time"),
+				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
+  else
+    {
+      calendar_spec_free(ctx->maint_window_start);
+      ctx->maint_window_start = new_start;
+    }
+
   if (p.duration == NULL || strlen (p.duration) == 0 ||
       (ctx->maint_window_duration = parse_duration (p.duration)) == BAD_TIME)
     {
-      log_msg (LOG_ERR, "Reboot strategy not chanded, invalid value for duration (%s)", p.duration);
+      log_msg (LOG_ERR, "Reboot strategy not changed, invalid value for duration (%s)", p.duration);
       return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
 				 SD_JSON_BUILD_PAIR_STRING("Variable", "duration"),
 				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
@@ -552,7 +583,13 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
     log_msg (LOG_INFO, "Maintenance window changed to '%s', lasting %s",
 	     start_str, duration_str);
 
-  save_config (ctx, SET_MAINT_WINDOW);
+  r = save_config (ctx, SET_MAINT_WINDOW);
+  if (r < 0)
+    {
+      log_msg (LOG_ERR, "Saving new maintenance window failed");
+      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
+				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+    }
 
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
