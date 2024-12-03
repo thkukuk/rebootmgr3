@@ -54,6 +54,7 @@ load_config(RM_CTX *ctx)
 {
   _cleanup_(econf_freeFilep) econf_file *key_file = NULL;
   econf_err error;
+  int r;
 
   error = open_config_file(&key_file);
   if (error)
@@ -87,6 +88,10 @@ load_config(RM_CTX *ctx)
 		  econf_errString(error));
 	  return -1;
 	}
+
+      if (str_start == NULL && str_duration != NULL)
+	str_duration = mfree(str_duration);
+
       error = econf_getStringValue(key_file, RM_GROUP, "strategy", &str_strategy);
       if (error && error != ECONF_NOKEY)
 	{
@@ -95,25 +100,47 @@ load_config(RM_CTX *ctx)
 	  return -1;
 	}
 
-      if (str_start == NULL && str_duration != NULL)
+      RM_RebootStrategy new_strategy = RM_REBOOTSTRATEGY_UNKNOWN;
+      if (str_strategy != NULL)
 	{
-	  free(str_duration);
-	  str_duration = NULL;
+	  r = rm_string_to_strategy(str_strategy, &new_strategy);
+	  if (r < 0)
+	    {
+	      log_msg(LOG_ERR, "ERROR: cannot parse strategy (%s): %s",
+		      str_strategy, strerror(-r));
+	      return -1;
+	    }
 	}
-      int r = rm_string_to_strategy(str_strategy, &(ctx->reboot_strategy));
-      if (r >= 0)
-	{
-	  int ret;
 
-	  if ((ret = calendar_spec_from_string(str_start,
-					       &ctx->maint_window_start)) < 0)
-	    log_msg(LOG_ERR, "ERROR: cannot parse window-start (%s): %s",
-		    str_start, strerror(-ret));
-	  if ((ctx->maint_window_duration =
-	       parse_duration(str_duration)) == BAD_TIME)
-	    log_msg(LOG_ERR, "ERROR: cannot parse window-duration '%s'",
-		    str_duration);
+      CalendarSpec *new_start = NULL;
+      if (str_start != NULL)
+	{
+	  r = calendar_spec_from_string(str_start, &new_start);
+	  if (r < 0)
+	    {
+	      log_msg(LOG_ERR, "ERROR: cannot parse window-start (%s): %s",
+		      str_start, strerror(-r));
+	      return -1;
+	    }
 	}
+
+      time_t new_duration = BAD_TIME;
+      if ((new_duration = parse_duration(str_duration)) == BAD_TIME)
+	{
+	  log_msg(LOG_ERR, "ERROR: cannot parse window-duration (%s)",
+		  str_duration);
+	  return -1;
+	}
+
+      if (new_strategy != RM_REBOOTSTRATEGY_UNKNOWN)
+	ctx->reboot_strategy = new_strategy;
+      if (new_start != NULL)
+	{
+	  calendar_spec_free(ctx->maint_window_start);
+	  ctx->maint_window_start = new_start;
+	}
+      if (new_duration != BAD_TIME)
+	ctx->maint_window_duration = new_duration;
     }
   return 0;
 }
