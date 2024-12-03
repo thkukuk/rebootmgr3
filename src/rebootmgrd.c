@@ -479,33 +479,33 @@ vl_method_set_strategy (sd_varlink *link, sd_json_variant *parameters,
       p.strategy >= RM_REBOOTSTRATEGY_OFF &&
       ctx->reboot_strategy != p.strategy)
     {
-      const char *str;
-
-      ctx->reboot_strategy = p.strategy;
-
-      /* Don't save strategy off */
+      /* Don't save strategy "off" */
       if (p.strategy != RM_REBOOTSTRATEGY_OFF)
 	{
-	  r = save_config (ctx, SET_STRATEGY);
+	  r = save_config(p.strategy, NULL, 0);
 	  if (r < 0)
 	    {
-	      log_msg (LOG_ERR, "Saving new reboot strategy failed");
-	      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
-					 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+	      log_msg(LOG_ERR, "Saving new reboot strategy failed");
+	      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
+					SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
 	    }
 	}
 
-      rm_strategy_to_str (p.strategy, &str);
-      log_msg (LOG_INFO, "Reboot strategy changed to '%s'", str);
+      ctx->reboot_strategy = p.strategy;
+
+      /* Informal log message */
+      const char *str;
+      rm_strategy_to_str(p.strategy, &str);
+      log_msg(LOG_INFO, "Reboot strategy changed to '%s'", str);
     }
   else
     {
-      log_msg (LOG_ERR, "Reboot strategy not changed, invalid value (%i)", p.strategy);
-      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
-				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+      log_msg(LOG_ERR, "Reboot strategy not changed, invalid value (%i)", p.strategy);
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.InvalidParameter",
+				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
 
-  return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
+  return sd_varlink_replybo(link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
 
 
@@ -550,7 +550,7 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
-  CalendarSpec *new_start;
+  CalendarSpec *new_start = NULL;
   if (p.start == NULL || strlen (p.start) == 0 ||
       calendar_spec_from_string (p.start, &new_start) < 0)
     {
@@ -559,20 +559,31 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
 				SD_JSON_BUILD_PAIR_STRING("Variable", "start time"),
 				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
-  else
+
+  time_t new_duration;
+  if (p.duration == NULL || strlen(p.duration) == 0 ||
+      (new_duration = parse_duration(p.duration)) == BAD_TIME)
     {
-      calendar_spec_free(ctx->maint_window_start);
-      ctx->maint_window_start = new_start;
+      calendar_spec_free(new_start);
+
+      log_msg(LOG_ERR, "Reboot strategy not changed, invalid value for duration (%s)", p.duration);
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.InvalidParameter",
+				SD_JSON_BUILD_PAIR_STRING("Variable", "duration"),
+				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
 
-  if (p.duration == NULL || strlen (p.duration) == 0 ||
-      (ctx->maint_window_duration = parse_duration (p.duration)) == BAD_TIME)
+  r = save_config(RM_REBOOTSTRATEGY_UNKNOWN, new_start, new_duration);
+  if (r < 0)
     {
-      log_msg (LOG_ERR, "Reboot strategy not changed, invalid value for duration (%s)", p.duration);
-      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.InvalidParameter",
-				 SD_JSON_BUILD_PAIR_STRING("Variable", "duration"),
-				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
+      calendar_spec_free(new_start);
+      log_msg(LOG_ERR, "Maintenance window not changed, saving failed");
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
+				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
+
+  calendar_spec_free(ctx->maint_window_start);
+  ctx->maint_window_start = new_start;
+  ctx->maint_window_duration = new_duration;
 
   /* Informal log message */
   _cleanup_(freep) char *start_str = NULL;
@@ -582,14 +593,6 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
   if (r >= 0)
     log_msg (LOG_INFO, "Maintenance window changed to '%s', lasting %s",
 	     start_str, duration_str);
-
-  r = save_config (ctx, SET_MAINT_WINDOW);
-  if (r < 0)
-    {
-      log_msg (LOG_ERR, "Saving new maintenance window failed");
-      return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.ErrorWritingConfig",
-				 SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
-    }
 
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
@@ -757,12 +760,19 @@ run_varlink (RM_CTX *ctx)
 					  "org.openSUSE.rebootmgr.FullStatus",  vl_method_fullstatus);
   if (r < 0)
     {
-      log_msg (LOG_ERR, "Failed to bind Varlink methods: %s",
-	       strerror (-r));
+      log_msg(LOG_ERR, "Failed to bind Varlink methods: %s",
+	      strerror(-r));
       return r;
     }
 
-  r = sd_varlink_server_listen_address (varlink_server, RM_VARLINK_SOCKET, 0666);
+  r = mkdir_p(RM_VARLINK_SOCKET_DIR, 0755);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to create directory '"RM_VARLINK_SOCKET_DIR"' for Varlink socket: %s",
+	      strerror(-r));
+      return r;
+    }
+  r = sd_varlink_server_listen_address(varlink_server, RM_VARLINK_SOCKET, 0666);
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to bind to Varlink socket: %s", strerror (-r));

@@ -35,7 +35,8 @@ static inline void freep(void *p) {
         *(void**)p = mfree(*(void**) p);
 }
 
-#define RM_VARLINK_SOCKET       "/run/rebootmgr/rebootmgrd.socket"
+#define RM_VARLINK_SOCKET_DIR   "/run/rebootmgr"
+#define RM_VARLINK_SOCKET       RM_VARLINK_SOCKET_DIR"/rebootmgrd.socket"
 
 typedef enum RM_RebootMethod {
   RM_REBOOTMETHOD_UNKNOWN = 0,

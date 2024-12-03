@@ -17,8 +17,7 @@
 
 #include "rebootmgr.h"
 
-#define SET_STRATEGY 1
-#define SET_MAINT_WINDOW 2
-
-int load_config (RM_CTX *ctx);
-int save_config (RM_CTX *ctx, int field);
+extern int load_config(RM_CTX *ctx);
+extern int save_config(RM_RebootStrategy reboot_strategy,
+            	       CalendarSpec *maint_window_start,
+                       time_t maint_window_duration);

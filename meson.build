@@ -20,7 +20,7 @@ fs = import('fs')
 pkg = import('pkgconfig')
 
 cc = meson.get_compiler('c')
-inc = include_directories('lib/calendarspec')
+inc = include_directories(['lib/calendarspec','src'])
 
 add_project_arguments(['-D_GNU_SOURCE=1',
 		       '-DXTSTRINGDEFINES',
@@ -71,7 +71,7 @@ libsystemd = dependency('libsystemd', version : '>=257')
 rebootmgrctl_c = ['src/rebootmgrctl.c', 'src/util.c', 'src/config_file.c',
                   'src/log_msg.c']
 rebootmgrd_c = ['src/rebootmgrd.c', 'src/log_msg.c', 'src/config_file.c',
-	     'src/util.c']
+	     'src/util.c', 'src/mkdir_p.c']
 
 executable('rebootmgrctl',
            rebootmgrctl_c,
