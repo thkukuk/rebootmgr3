@@ -18,10 +18,11 @@
 #include "rebootmgr.h"
 #include "calendarspec.h"
 
-const char *bool_to_str (bool var);
+int mkdir_p(const char *path, mode_t mode);
+const char *bool_to_str(bool var);
 int rm_duration_to_string(time_t duration, const char **ret);
-int rm_string_to_strategy (const char *str_strategy, RM_RebootStrategy *ret);
-int rm_strategy_to_str (RM_RebootStrategy strategy, const char **ret);
-int rm_status_to_str (RM_RebootStatus status, RM_RebootMethod method,
-		const char **ret);
-int rm_method_to_str (RM_RebootMethod method, const char **ret);
+int rm_string_to_strategy(const char *str_strategy, RM_RebootStrategy *ret);
+int rm_strategy_to_str(RM_RebootStrategy strategy, const char **ret);
+int rm_status_to_str(RM_RebootStatus status, RM_RebootMethod method,
+		     const char **ret);
+int rm_method_to_str(RM_RebootMethod method, const char **ret);
