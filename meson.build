@@ -20,7 +20,7 @@ fs = import('fs')
 pkg = import('pkgconfig')
 
 cc = meson.get_compiler('c')
-inc = include_directories('lib')
+inc = include_directories('lib/calendarspec')
 
 add_project_arguments(['-D_GNU_SOURCE=1',
 		       '-DXTSTRINGDEFINES',
@@ -63,21 +63,15 @@ mandir = join_paths(prefixdir, get_option('mandir'))
 datadir = join_paths(prefixdir, get_option('datadir'))
 configdir = join_paths(prefixdir, get_option('datadir'), meson.project_name())
 
+subdir('lib')
+
 libeconf = dependency('libeconf', version : '>=0.7.4')
 libsystemd = dependency('libsystemd', version : '>=257')
-
-libcalendarspec_c = ['lib/calendarspec.c', 'lib/parse-duration.c',
-		  'lib/time-util.c']
 
 rebootmgrctl_c = ['src/rebootmgrctl.c', 'src/util.c', 'src/config_file.c',
                   'src/log_msg.c']
 rebootmgrd_c = ['src/rebootmgrd.c', 'src/log_msg.c', 'src/config_file.c',
 	     'src/util.c']
-
-libcalendarspec_a = static_library(
-  'libcalendarspec',
-  libcalendarspec_c,
-  install : false)
 
 executable('rebootmgrctl',
            rebootmgrctl_c,
