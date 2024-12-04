@@ -20,65 +20,49 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <libgen.h>
 
 #include "rebootmgr.h"
 #include "util.h"
 
-static int
-try_mkdir(const char* path, mode_t mode)
-{
-  struct stat st;
-
-  /* Try to make the directory */
-  if (mkdir(path, mode) == 0)
-    return 0;
-
-  /* If it fails for any reason but EEXIST, fail */
-  if (errno != EEXIST)
-    return -errno;
-
-  /* Check if the existing path is a directory */
-  if (stat(path, &st) != 0)
-    return -errno;
-
-  /* If not, fail with ENOTDIR */
-  if (!S_ISDIR(st.st_mode))
-    return -ENOTDIR;
-
-  return 0;
-}
-
 int
 mkdir_p(const char *path, mode_t mode)
 {
-  _cleanup_(freep) char *_path = NULL;
-  char *p;
-  int r;
-
-  /* Copy string so it's mutable */
-  _path = strdup(path);
-  if (_path == NULL)
+  if (path == NULL)
     return -EINVAL;
 
-  /* Iterate the string */
-  for (p = _path + 1; *p; p++)
+  if (mkdir(path, mode) == 0)
+    return 0;
+
+  if (errno == EEXIST)
     {
-      if (*p == '/')
-	{
-	  /* Temporarily truncate */
-	  *p = '\0';
+      struct stat st;
 
-	  r = try_mkdir(_path, mode);
-	  if (r < 0)
-	    return r;
+      /* Check if the existing path is a directory */
+      if (stat(path, &st) != 0)
+	return -errno;
 
-	  *p = '/';
-        }
+      /* If not, fail with ENOTDIR */
+      if (!S_ISDIR(st.st_mode))
+	return -ENOTDIR;
+
+      /* if it is a directory, return */
+      return 0;
     }
 
-  r = try_mkdir(_path, mode);
+  /* If it fails for any reason but ENOENT, fail */
+  if (errno != ENOENT)
+    return -errno;
+
+  char *buf = strdup(path);
+  if (buf == NULL)
+    return -ENOMEM;
+
+  int r = mkdir_p(dirname(buf), mode);
+  free(buf);
+  /* if we couldn't create the parent, fail, too */
   if (r < 0)
     return r;
 
-  return 0;
+  return mkdir(path, mode);
 }
