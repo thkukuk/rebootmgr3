@@ -87,6 +87,7 @@ static SD_VARLINK_DEFINE_ERROR(InvalidParameter);
 static SD_VARLINK_DEFINE_ERROR(AlreadyInProgress);
 static SD_VARLINK_DEFINE_ERROR(NoRebootScheduled);
 static SD_VARLINK_DEFINE_ERROR(ErrorWritingConfig);
+static SD_VARLINK_DEFINE_ERROR(InternalError);
 
 SD_VARLINK_DEFINE_INTERFACE(
                 org_openSUSE_rebootmgr,
@@ -265,12 +266,13 @@ time_handler (sd_event_source _unused_(*s), uint64_t _unused_(usec), void *userd
 {
   RM_CTX *ctx = userdata;
 
-  log_msg (LOG_DEBUG, "time_handler called");
+  if (debug_flag)
+    log_msg (LOG_DEBUG, "Time handler for reboot called");
 
   if (ctx->temp_off)
     {
       if (debug_flag)
-	log_msg (LOG_DEBUG, "Reboot temporary disabled, ignoring time");
+	log_msg (LOG_DEBUG, "Reboot temporary disabled, ignoring timer");
       return 0;
     }
 
@@ -352,9 +354,9 @@ time_handler (sd_event_source _unused_(*s), uint64_t _unused_(usec), void *userd
 }
 
 static int
-vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
-		  sd_varlink_method_flags_t _unused_(flags),
-		  void *userdata)
+vl_method_reboot(sd_varlink *link, sd_json_variant *parameters,
+		 sd_varlink_method_flags_t _unused_(flags),
+		 void *userdata)
 {
   struct p {
     int reboot_method;
@@ -375,10 +377,10 @@ vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
   if (verbose_flag)
     log_msg (LOG_INFO, "Varlink method \"Reboot\" called...");
 
-  r = sd_varlink_dispatch (link, parameters, dispatch_table, &p);
+  r = sd_varlink_dispatch(link, parameters, dispatch_table, &p);
   if (r != 0)
     {
-      log_msg (LOG_ERR, "Reboot request: varlik dispatch failed: %s", strerror (-r));
+      log_msg(LOG_ERR, "Reboot request: varlik dispatch failed: %s", strerror (-r));
       return r;
     }
 
@@ -386,44 +388,52 @@ vl_method_reboot (sd_varlink *link, sd_json_variant *parameters,
     {
       const char *str;
 
-      rm_method_to_str (p.reboot_method, &str);
-      log_msg (LOG_DEBUG, "Reboot request: %s, force: %s", str, bool_to_str (p.force));
+      rm_method_to_str(p.reboot_method, &str);
+      log_msg(LOG_DEBUG, "Reboot request: %s (%i), force: %s", str, p.reboot_method, bool_to_str (p.force));
     }
 
   if (p.reboot_method != RM_REBOOTMETHOD_HARD &&
       p.reboot_method != RM_REBOOTMETHOD_SOFT)
-    return sd_varlink_error_invalid_parameter_name (link, "reboot");
+    return sd_varlink_error_invalid_parameter_name(link, "reboot");
 
   if (ctx->reboot_status != RM_REBOOTSTATUS_NOT_REQUESTED)
-    return sd_varlink_errorbo (link, "org.openSUSE.rebootmgr.AlreadyInProgress",
-			       SD_JSON_BUILD_PAIR_INTEGER("Method", ctx->reboot_method),
-			       SD_JSON_BUILD_PAIR_STRING("Scheduled", format_timestamp (time_str, sizeof (time_str), ctx->reboot_time)));
+    return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.AlreadyInProgress",
+			      SD_JSON_BUILD_PAIR_INTEGER("Method", ctx->reboot_method),
+			      SD_JSON_BUILD_PAIR_STRING("Scheduled", format_timestamp (time_str, sizeof (time_str), ctx->reboot_time)));
 
   ctx->reboot_method = p.reboot_method;
   ctx->reboot_status = RM_REBOOTSTATUS_REQUESTED;
 
   usec_t reboot_time;
   if (p.force)
-      reboot_time = now (CLOCK_REALTIME);
+      reboot_time = now(CLOCK_REALTIME);
   else
     {
-      r = calc_reboot_time (ctx, &reboot_time);
+      r = calc_reboot_time(ctx, &reboot_time);
       if (r < 0)
 	{
-	  // XXX sd_varlink_error(), reset reboot_status
-	  log_msg (LOG_ERR, "Cannot calculate reboot timer: %s", strerror (-r));
-	  return r;
+	  ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
+	  ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
+	  log_msg(LOG_ERR, "Cannot calculate reboot timer: %s", strerror(-r));
+	  return sd_varlink_error(link,"org.openSUSE.rebootmgr.InternalError", NULL);
 	}
     }
-  r = sd_event_add_time (ctx->loop, &ctx->timer, CLOCK_REALTIME,
-			 reboot_time, 0, time_handler, ctx);
 
+  r = sd_event_add_time(ctx->loop, &ctx->timer, CLOCK_REALTIME,
+			reboot_time, 0, time_handler, ctx);
+  if (r < 0)
+    {
+      ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
+      ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
+      log_msg(LOG_ERR, "Cannot add reboot timer to event loop: %s", strerror(-r));
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.InternalError", NULL);
+    }
   ctx->reboot_status = RM_REBOOTSTATUS_WAITING_WINDOW;
   ctx->reboot_time = reboot_time;
 
-  return sd_varlink_replybo (link,
-			     SD_JSON_BUILD_PAIR_INTEGER("Method", ctx->reboot_method),
-			     SD_JSON_BUILD_PAIR_STRING("Scheduled", format_timestamp (time_str, sizeof (time_str), ctx->reboot_time)));
+  return sd_varlink_replybo(link,
+			    SD_JSON_BUILD_PAIR_INTEGER("Method", ctx->reboot_method),
+			    SD_JSON_BUILD_PAIR_STRING("Scheduled", format_timestamp (time_str, sizeof (time_str), ctx->reboot_time)));
 
 #if 0
   Context *c = ASSERT_PTR(userdata);
