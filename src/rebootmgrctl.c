@@ -27,6 +27,7 @@
 
 #include "basics.h"
 #include "common.h"
+#include "parse-duration.h"
 
 #ifndef _
 #define _(String) gettext(String)
@@ -54,7 +55,7 @@ connect_to_rebootmgr(sd_varlink **ret)
   r = sd_varlink_connect_address(&link, RM_VARLINK_SOCKET);
   if (r < 0)
     {
-      fprintf(stderr, "Failed to connect to " RM_VARLINK_SOCKET ": %s",
+      fprintf(stderr, "Failed to connect to " RM_VARLINK_SOCKET ": %s\n",
 	       strerror(-r));
       return r;
     }
@@ -160,7 +161,7 @@ cancel_reboot(void)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.Cancel", NULL, &result, &error_id);
   if (r < 0)
     {
-      fprintf(stderr, "Failed to call cancel method: %s\n", strerror(-r));
+      fprintf(stderr, _("Failed to call cancel method: %s\n"), strerror(-r));
       return r;
     }
   if (error_id && strlen(error_id) > 0)
@@ -212,7 +213,7 @@ set_strategy(RM_RebootStrategy strategy)
 		     SD_JSON_BUILD_PAIR("Strategy", SD_JSON_BUILD_INTEGER(strategy)));
   if (r < 0)
     {
-      fprintf(stderr, "Failed to build JSON data: %s\n", strerror(-r));
+      fprintf(stderr, _("Failed to build JSON data: %s\n"), strerror(-r));
       return r;
     }
 
@@ -220,7 +221,7 @@ set_strategy(RM_RebootStrategy strategy)
   r = sd_varlink_call(link, "org.openSUSE.rebootmgr.SetStrategy", params, &result, &error_id);
   if (r < 0)
     {
-      fprintf(stderr, "Failed to call SetStrategy method: %s\n", strerror(-r));
+      fprintf(stderr, _("Failed to call SetStrategy method: %s\n"), strerror(-r));
       return r;
     }
 
@@ -503,37 +504,51 @@ dump_config(void)
   RM_CTX ctx;
   int r;
 
-  /* XXX make this more elegant and share initialization
-     with rebootmgrd */
-  ctx.reboot_strategy = RM_REBOOTSTRATEGY_BEST_EFFORT;
-  ctx.maint_window_duration = 3600;
-  calendar_spec_from_string("03:30", &ctx.maint_window_start);
+  ctx.reboot_strategy = RM_REBOOTSTRATEGY_UNKNOWN;
+  ctx.maint_window_duration = BAD_TIME;
+  ctx.maint_window_start = NULL;
 
   log_init();
 
-  r = load_config (&ctx);
+  r = load_config(&ctx);
   if (r < 0)
     return -r;
 
-  r = rm_strategy_to_str(ctx.reboot_strategy, &strategy_str);
-  if (r < 0)
+  if (ctx.reboot_strategy != RM_REBOOTSTRATEGY_UNKNOWN)
     {
-      fprintf(stderr, _("Converting strategy to string failed: %s\n"), strerror(-r));
-      return -1;
+      r = rm_strategy_to_str(ctx.reboot_strategy, &strategy_str);
+      if (r < 0)
+	{
+	  fprintf(stderr, _("Converting strategy to string failed: %s\n"), strerror(-r));
+	  return -1;
+	}
     }
+  else
+    strategy_str = _("Not set");
 
-  r = calendar_spec_to_string(ctx.maint_window_start, &start_str);
-  if (r < 0)
+  if (ctx.maint_window_start != NULL)
     {
-      fprintf(stderr, _("Converting calendar entry to string failed: %s\n"), strerror(-r));
-      return -1;
+      r = calendar_spec_to_string(ctx.maint_window_start, &start_str);
+      if (r < 0)
+	{
+	  fprintf(stderr, _("Converting calendar entry to string failed: %s\n"), strerror(-r));
+	  return -1;
+	}
     }
-  r = rm_duration_to_string(ctx.maint_window_duration, &duration_str);
-  if (r < 0)
+  else
+    start_str = strdup(_("Not set"));
+
+  if (ctx.maint_window_duration != BAD_TIME)
     {
-      fprintf(stderr, _("Error converting duration to string: %s\n"), strerror(-r));
-      return -1;
+      r = rm_duration_to_string(ctx.maint_window_duration, &duration_str);
+      if (r < 0)
+	{
+	  fprintf(stderr, _("Error converting duration to string: %s\n"), strerror(-r));
+	  return -1;
+	}
     }
+  else
+    duration_str = strdup(_("Not set"));
 
   printf ("strategy: %s\n", strategy_str);
   printf ("window-start: %s\n", start_str);

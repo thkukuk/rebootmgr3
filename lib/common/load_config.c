@@ -84,9 +84,6 @@ load_config(RM_CTX *ctx)
 	  return -1;
 	}
 
-      if (str_start == NULL && str_duration != NULL)
-	str_duration = mfree(str_duration);
-
       error = econf_getStringValue(key_file, RM_GROUP, "strategy", &str_strategy);
       if (error && error != ECONF_NOKEY)
 	{
@@ -120,11 +117,14 @@ load_config(RM_CTX *ctx)
 	}
 
       time_t new_duration = BAD_TIME;
-      if ((new_duration = parse_duration(str_duration)) == BAD_TIME)
+      if (str_duration != NULL)
 	{
-	  log_msg(LOG_ERR, "ERROR: cannot parse window-duration (%s)",
-		  str_duration);
-	  return -1;
+	  if ((new_duration = parse_duration(str_duration)) == BAD_TIME)
+	    {
+	      log_msg(LOG_ERR, "ERROR: cannot parse window-duration (%s)",
+		      str_duration);
+	      return -1;
+	    }
 	}
 
       if (new_strategy != RM_REBOOTSTRATEGY_UNKNOWN)
