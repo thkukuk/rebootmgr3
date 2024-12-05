@@ -16,48 +16,18 @@
    You should have received a copy of the GNU General Public License along
    with this program; if not, see <http://www.gnu.org/licenses/>. */
 
-#include "config.h"
+#pragma once
 
-#include <time.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <syslog.h>
-#include <unistd.h>
-#include <systemd/sd-journal.h>
+#define _cleanup_(x) __attribute__((__cleanup__(x)))
+#define _unused_(x) x __attribute__((unused))
 
-#include "log_msg.h"
+#define mfree(memory)                           \
+        ({                                      \
+                free(memory);                   \
+                (typeof(memory)) NULL;          \
+        })
 
-static int is_tty = 1;
-int debug_flag = 0;
-
-void
-log_init (void)
-{
-  is_tty = isatty (STDOUT_FILENO);
+static inline void freep(void *p) {
+        *(void**)p = mfree(*(void**) p);
 }
 
-void
-log_msg (int priority, const char *fmt, ...)
-{
-  va_list ap;
-
-  va_start (ap, fmt);
-
-  if (is_tty || debug_flag)
-    {
-      if (priority == LOG_ERR)
-	{
-	  vfprintf (stderr, fmt, ap);
-	  fputc ('\n', stderr);
-	}
-      else
-	{
-	  vprintf (fmt, ap);
-	  putchar ('\n');
-	}
-    }
-  else
-    sd_journal_printv (priority, fmt, ap);
-
-  va_end (ap);
-}

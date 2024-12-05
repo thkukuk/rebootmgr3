@@ -25,10 +25,8 @@
 #include <libintl.h>
 #include <systemd/sd-varlink.h>
 
-#include "rebootmgr.h"
-#include "util.h"
-#include "config_file.h"
-#include "log_msg.h"
+#include "basics.h"
+#include "common.h"
 
 #ifndef _
 #define _(String) gettext(String)

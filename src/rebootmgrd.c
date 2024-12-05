@@ -25,10 +25,8 @@
 #include <systemd/sd-daemon.h>
 #include <systemd/sd-varlink.h>
 
-#include "config_file.h"
-#include "log_msg.h"
-#include "rebootmgr.h"
-#include "util.h"
+#include "basics.h"
+#include "common.h"
 #include "parse-duration.h"
 
 static int verbose_flag = 0;
@@ -837,12 +835,12 @@ destroy_context (RM_CTX *ctx)
 static void
 print_help (void)
 {
-  log_msg (LOG_INFO, _("rebootmgrd - reboot following a specified strategy"));
+  log_msg (LOG_INFO, "rebootmgrd - reboot following a specified strategy");
 
-  log_msg (LOG_INFO, _("  -d,--debug     Debug mode, no reboot done"));
-  log_msg (LOG_INFO, _("  -v,--verbose   Verbose logging"));
-  log_msg (LOG_INFO, _("  -?, --help     Give this help list"));
-  log_msg (LOG_INFO, _("      --version  Print program version"));
+  log_msg (LOG_INFO, "  -d,--debug     Debug mode, no reboot done");
+  log_msg (LOG_INFO, "  -v,--verbose   Verbose logging");
+  log_msg (LOG_INFO, "  -?, --help     Give this help list");
+  log_msg (LOG_INFO, "      --version  Print program version");
 }
 
 int
@@ -900,8 +898,7 @@ main (int argc, char **argv)
 
   if (argc > 1)
     {
-      fprintf (stderr,
-	       _("Try `rebootmgrd --help' for more information.\n"));
+      fprintf (stderr, "Try `rebootmgrd --help' for more information.\n");
       return 1;
     }
 

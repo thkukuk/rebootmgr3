@@ -20,7 +20,6 @@ fs = import('fs')
 pkg = import('pkgconfig')
 
 cc = meson.get_compiler('c')
-inc = include_directories(['lib/calendarspec','src'])
 
 add_project_arguments(['-D_GNU_SOURCE=1',
 		       '-DXTSTRINGDEFINES',
@@ -63,21 +62,21 @@ mandir = join_paths(prefixdir, get_option('mandir'))
 datadir = join_paths(prefixdir, get_option('datadir'))
 configdir = join_paths(prefixdir, get_option('datadir'), meson.project_name())
 
+inc = include_directories(['lib/calendarspec', 'lib/common', 'src', '.'])
+
 subdir('lib')
 
 libeconf = dependency('libeconf', version : '>=0.7.4')
 libsystemd = dependency('libsystemd', version : '>=257')
 
-rebootmgrctl_c = ['src/rebootmgrctl.c', 'src/util.c', 'src/config_file.c',
-                  'src/log_msg.c']
-rebootmgrd_c = ['src/rebootmgrd.c', 'src/log_msg.c', 'src/config_file.c',
-	     'src/util.c', 'src/mkdir_p.c']
+rebootmgrctl_c = ['src/rebootmgrctl.c']
+rebootmgrd_c = ['src/rebootmgrd.c']
 
 executable('rebootmgrctl',
            rebootmgrctl_c,
            include_directories : inc,
            dependencies : [libeconf, libsystemd],
-           link_with : [libcalendarspec_a],
+           link_with : [libcommon_a, libcalendarspec_a],
            install : true,
 	   install_dir: bindir)
 
@@ -85,7 +84,7 @@ executable('rebootmgrd',
            rebootmgrd_c,
            include_directories : inc,
            dependencies : [libeconf, libsystemd],
-	   link_with : [libcalendarspec_a],
+	   link_with : [libcommon_a, libcalendarspec_a],
            install : true,
 	   install_dir: libexecdir)
 

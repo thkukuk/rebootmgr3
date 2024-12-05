@@ -22,8 +22,7 @@
 #include <sys/stat.h>
 #include <libgen.h>
 
-#include "rebootmgr.h"
-#include "util.h"
+#include "common.h"
 
 int
 mkdir_p(const char *path, mode_t mode)

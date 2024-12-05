@@ -4,7 +4,9 @@
 #include <sys/stat.h>
 #include <ftw.h>
 
-#include "util.h"
+#include "basics.h"
+
+#include "common.h"
 
 /* test that mkdir_p works */
 

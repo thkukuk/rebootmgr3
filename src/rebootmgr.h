@@ -18,23 +18,6 @@
 #include <systemd/sd-event.h>
 #include "calendarspec.h"
 
-#ifndef _
-#define _(String) gettext(String)
-#endif
-
-#define _cleanup_(x) __attribute__((__cleanup__(x)))
-#define _unused_(x) x __attribute__((unused))
-
-#define mfree(memory)                           \
-        ({                                      \
-                free(memory);                   \
-                (typeof(memory)) NULL;          \
-        })
-
-static inline void freep(void *p) {
-        *(void**)p = mfree(*(void**) p);
-}
-
 #define RM_VARLINK_SOCKET_DIR   "/run/rebootmgr"
 #define RM_VARLINK_SOCKET       RM_VARLINK_SOCKET_DIR"/rebootmgrd.socket"
 
