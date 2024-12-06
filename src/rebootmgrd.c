@@ -71,11 +71,11 @@ static SD_VARLINK_DEFINE_METHOD(
 		FullStatus,
 		SD_VARLINK_FIELD_COMMENT("Provide full status of rebootmgr"),
 		SD_VARLINK_DEFINE_OUTPUT(RebootStatus, SD_VARLINK_INT, 0),
+		SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, 0),
 		SD_VARLINK_DEFINE_OUTPUT(RequestedMethod, SD_VARLINK_INT, SD_VARLINK_NULLABLE),
 		SD_VARLINK_DEFINE_OUTPUT(RebootTime, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
-		SD_VARLINK_DEFINE_OUTPUT(RebootStrategy, SD_VARLINK_INT, 0),
-		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, 0),
-		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, 0));
+		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowStart, SD_VARLINK_STRING, SD_VARLINK_NULLABLE),
+		SD_VARLINK_DEFINE_OUTPUT(MaintenanceWindowDuration, SD_VARLINK_INT, SD_VARLINK_NULLABLE));
 
 static SD_VARLINK_DEFINE_METHOD(
 		Quit,
@@ -141,15 +141,13 @@ vl_method_status (sd_varlink *link, sd_json_variant *parameters,
   if (ctx->temp_off)
     tmp_status = RM_REBOOTSTATUS_NOT_REQUESTED;
 
-  /* XXX Isn't it possible to add RequestedMethod as single entry? */
-  if (ctx->reboot_method == RM_REBOOTMETHOD_UNKNOWN)
-    r = sd_json_buildo (&v,
-			SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)));
-  else
-    r = sd_json_buildo (&v,
-			SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)),
-			SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)),
-			SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(format_timestamp(buf, sizeof(buf), ctx->reboot_time))));
+  r = sd_json_buildo(&v, SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)));
+  if (r == 0 && ctx->reboot_method != RM_REBOOTMETHOD_UNKNOWN)
+    {
+      r = sd_json_variant_merge_objectbo(&v,
+	      SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)),
+	      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(format_timestamp(buf, sizeof(buf), ctx->reboot_time))));
+    }
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to build JSON data: %s", strerror (-r));
@@ -167,7 +165,6 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   static const sd_json_dispatch_field dispatch_table[] = {
     {}
   };
-  char buf[FORMAT_TIMESTAMP_MAX];
   RM_CTX *ctx = userdata;
   int r;
 
@@ -184,24 +181,27 @@ vl_method_fullstatus (sd_varlink *link, sd_json_variant *parameters,
   if (ctx->temp_off)
     tmp_status = RM_REBOOTSTATUS_NOT_REQUESTED;
 
-  _cleanup_(freep) char *str = NULL;
-  if (ctx->maint_window_start)
-    calendar_spec_to_string (ctx->maint_window_start, &str);
-
-  /* XXX Add RequestedMethod and RebootTime only if there was one */
   r = sd_json_buildo (&v,
 		      SD_JSON_BUILD_PAIR("RebootStatus", SD_JSON_BUILD_INTEGER(tmp_status)),
-		      SD_JSON_BUILD_PAIR("RebootStrategy", SD_JSON_BUILD_INTEGER(ctx->reboot_strategy)),
-		      SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str?str:"")),
-		      SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)),
-		      SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(ctx->reboot_time?format_timestamp(buf, sizeof(buf), ctx->reboot_time):"")));
+		      SD_JSON_BUILD_PAIR("RebootStrategy", SD_JSON_BUILD_INTEGER(ctx->reboot_strategy)));
 
-#if 0
-  /* XXX find out how to enhance json records */
   if (r >= 0 && ctx->reboot_method != RM_REBOOTMETHOD_UNKNOWN)
-    r = sd_json_variant_append_arraybo(&v,
-				       SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)));
-#endif
+    r = sd_json_variant_merge_objectbo(&v, SD_JSON_BUILD_PAIR("RequestedMethod", SD_JSON_BUILD_INTEGER(ctx->reboot_method)));
+  if (r >= 0 && ctx->maint_window_start)
+    {
+      _cleanup_(freep) char *str = NULL;
+
+      calendar_spec_to_string(ctx->maint_window_start, &str);
+      r = sd_json_variant_merge_objectbo(&v, SD_JSON_BUILD_PAIR("MaintenanceWindowStart", SD_JSON_BUILD_STRING(str)));
+    }
+  if (r >= 0 && ctx->maint_window_duration != BAD_TIME)
+    r = sd_json_variant_merge_objectbo(&v, SD_JSON_BUILD_PAIR("MaintenanceWindowDuration", SD_JSON_BUILD_INTEGER(ctx->maint_window_duration)));
+  if (r >= 0 && ctx->reboot_time)
+    {
+      char buf[FORMAT_TIMESTAMP_MAX];
+      r = sd_json_variant_merge_objectbo(&v, SD_JSON_BUILD_PAIR("RebootTime", SD_JSON_BUILD_STRING(format_timestamp(buf, sizeof(buf), ctx->reboot_time))));
+    }
+
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to build JSON data: %s", strerror (-r));
