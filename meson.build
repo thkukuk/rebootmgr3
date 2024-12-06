@@ -70,7 +70,7 @@ libeconf = dependency('libeconf', version : '>=0.7.4')
 libsystemd = dependency('libsystemd', version : '>=257')
 
 rebootmgrctl_c = ['src/rebootmgrctl.c']
-rebootmgrd_c = ['src/rebootmgrd.c']
+rebootmgrd_c = ['src/rebootmgrd.c', 'src/varlink-org.openSUSE.rebootmgr.c']
 
 executable('rebootmgrctl',
            rebootmgrctl_c,
