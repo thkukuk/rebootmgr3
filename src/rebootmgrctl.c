@@ -672,12 +672,16 @@ main(int argc, char **argv)
 		  r = rm_status_to_str(r_status, r_method, &str);
 		  if (r < 0)
 		    {
-		      fprintf(stderr, "Converting status to string failed: %s\n",
+		      fprintf(stderr, _("Converting status to string failed: %s\n"),
 			      strerror(-r));
 		      retval = 1;
 		    }
 		  else
-		    printf("Status: %s\n", str);
+		    {
+		      printf(_("Status: %s\n"), str);
+		      if (r_time)
+			printf(_("Scheduled for: %s\n"), r_time);
+		    }
 		}
 	      else
 		retval = 1;
