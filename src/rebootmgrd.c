@@ -261,6 +261,14 @@ calc_reboot_time (RM_CTX *ctx, usec_t *ret)
   return 0;
 }
 
+static void
+reset_timer(RM_CTX *ctx)
+{
+  ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
+  ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
+  ctx->timer = sd_event_source_unref (ctx->timer);
+}
+
 static int
 time_handler (sd_event_source _unused_(*s), uint64_t _unused_(usec), void *userdata)
 {
@@ -347,7 +355,7 @@ time_handler (sd_event_source _unused_(*s), uint64_t _unused_(usec), void *userd
             }
         }
 
-      ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
+      reset_timer(ctx);
     }
 
   return 0;
@@ -636,9 +644,7 @@ vl_method_cancel (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
-  ctx->timer = sd_event_source_unref (ctx->timer);
-  ctx->reboot_status = RM_REBOOTSTATUS_NOT_REQUESTED;
-  ctx->reboot_method = RM_REBOOTMETHOD_UNKNOWN;
+  reset_timer(ctx);
 
   return sd_varlink_replybo (link, SD_JSON_BUILD_PAIR_BOOLEAN("Success", true));
 }
