@@ -149,7 +149,7 @@
     </varlistentry>
 
     <varlistentry>
-      <term><option>reboot</option> <optional>fast|now</optional></term>
+      <term><option>reboot</option> <optional>now</optional></term>
       <listitem>
 	<para>
 	  Tells rebootmgrd to schedule a reboot. With
@@ -162,7 +162,7 @@
     </varlistentry>
 
     <varlistentry>
-      <term><option>soft-reboot</option> <optional>fast|now</optional></term>
+      <term><option>soft-reboot</option> <optional>now</optional></term>
       <listitem>
 	<para>
 	  Tells rebootmgrd to schedule a soft-reboot (see
@@ -218,19 +218,17 @@
       <term><option>set-strategy</option> best-effort|maint-window|instantly|off</term>
       <listitem>
 	<para>
-	  A new strategy to reboot the machine is set and written into
-	  <filename>/etc/rebootmgr/rebootmgr.conf.d/50-rebootmgr.conf</filename>.
+	  A new strategy to reboot the machine is written in
+	  <filename>/etc/rebootmgr/rebootmgr.conf.d/50-strategy.conf</filename>.
 	</para>
 	<variablelist>
 	  <varlistentry>
 	    <term>best-effort</term>
 	    <listitem>
 	      <para>
-		This is the default strategy. If a maintenance window
-		is specified, the strategy will be
-		<option>maint-window</option>. If no maintenance window is
-		specified, the machine is immediately rebooted
-		(<option>instantly</option>).
+		This is the default setting. If a maintenance window is specified,
+		<option>maint-window</option> is used. If no maintenance window is
+		specified, the reboot takes place immediately (instantly).
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -238,9 +236,9 @@
 	    <term>maint-window</term>
 	    <listitem>
 	      <para>
-		Reboot does happen only during a specified maintenance
-		window. If no window is specified, the
-		<option>instantly</option> strategy is followed.
+		Reboot only during a specific maintenance window. If no
+		maintenance window is specified, the system reboots
+		immediately.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -248,8 +246,7 @@
 	    <term>instantly</term>
 	    <listitem>
 	      <para>
-		Other services will be informed that a reboot will
-		happen. Reboot will be done without waiting for a
+		The reboot is carried out without waiting for a
 		maintenance window.
 	      </para>
 	    </listitem>
@@ -258,9 +255,12 @@
 	    <term>off</term>
 	    <listitem>
 	      <para>
-		Reboot requests are temporary
-		ignored. <filename>rebootmgr.conf</filename> is not
-		modified.
+		rebootmgrd continues to run, but ignores all reboot timers
+		that expire in the meantime. The configuration file is not
+		updated, so this option is no longer active after a reboot.
+		When rebootmgr is reactivated, it will continue to use the
+		old specified maintenance window and any reboot timers that
+		are still running will no longer be ignored.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -288,6 +288,10 @@
 	  project='systemd'><refentrytitle>systemd.time</refentrytitle><manvolnum>7</manvolnum></citerefentry>.
 	  The format of <varname>duration</varname> is
           <literal>[XXh][YYm]</literal>.
+	  </para>
+	  <para>
+	    A new maintenance window is written in
+	  <filename>/etc/rebootmgr/rebootmgr.conf.d/50-maintenance-window.conf</filename>.
 	</para>
       </listitem>
     </varlistentry>
