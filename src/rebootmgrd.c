@@ -723,8 +723,6 @@ run_varlink (RM_CTX *ctx)
   return 0;
 }
 
-static int log_type = LOG_DEBUG;
-
 static int
 create_context (RM_CTX **ctx)
 {
@@ -807,7 +805,6 @@ main (int argc, char **argv)
         case 'd':
           debug_flag = 1;
 	  verbose_flag = 1;
-          log_type = LOG_DEBUG;
           break;
         case '?':
         case 'h':
@@ -815,7 +812,6 @@ main (int argc, char **argv)
           return 0;
         case 'v':
           verbose_flag = 1;
-          log_type = LOG_INFO;
           break;
         case '\255':
           fprintf (stdout, "rebootmgrd (%s) %s\n", PACKAGE, VERSION);
