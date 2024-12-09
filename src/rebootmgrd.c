@@ -622,22 +622,19 @@ announce_ready (void)
 static int
 varlink_server_loop (sd_varlink_server *server, RM_CTX *ctx)
 {
-  _cleanup_(sd_event_unrefp) sd_event *event = NULL;
   int r;
 
   /* Runs a sd_varlink service event loop populated with a passed fd. */
 
-  r = sd_event_new (&event);
+  r = sd_event_new (&(ctx->loop));
   if (r < 0)
     return r;
-
-  ctx->loop = event;
 
   r = sd_varlink_server_set_exit_on_idle (server, false);
   if (r < 0)
     return r;
 
-  r = sd_varlink_server_attach_event (server, event, 0);
+  r = sd_varlink_server_attach_event (server, ctx->loop, 0);
   if (r < 0)
     return r;
 
@@ -645,7 +642,7 @@ varlink_server_loop (sd_varlink_server *server, RM_CTX *ctx)
   if (r < 0)
     return r;
 
-  return sd_event_loop (event);
+  return sd_event_loop (ctx->loop);
 }
 
 static int
@@ -757,6 +754,7 @@ destroy_context (RM_CTX *ctx)
     return -EBADF;
 
   calendar_spec_free (ctx->maint_window_start);
+  sd_event_unrefp(&(ctx->loop));
   free (ctx);
 
   return 0;
