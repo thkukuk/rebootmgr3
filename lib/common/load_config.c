@@ -36,14 +36,6 @@ open_config_file(econf_file **key_file)
 			  "conf", "=", "#");
 }
 
-// XXX Bump libeconf require to 0.7.5
-// static void
-// econf_freeFilep(econf_file **key_file)
-// {
-//   econf_freeFile(*key_file);
-//   *key_file = NULL;
-// }
-
 int
 load_config(RM_CTX *ctx)
 {

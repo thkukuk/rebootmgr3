@@ -66,7 +66,7 @@ inc = include_directories(['lib/calendarspec', 'lib/common', 'src', '.'])
 
 subdir('lib')
 
-libeconf = dependency('libeconf', version : '>=0.7.4')
+libeconf = dependency('libeconf', version : '>=0.7.5')
 libsystemd = dependency('libsystemd', version : '>=257')
 
 rebootmgrctl_c = ['src/rebootmgrctl.c']
