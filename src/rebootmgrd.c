@@ -450,10 +450,8 @@ struct set_window {
 static void
 set_window_free (struct set_window *var)
 {
-  free(var->start);
-  var->start = NULL;
-  free(var->duration);
-  var->duration = NULL;
+  var->start = mfree(var->start);
+  var->duration = mfree(var->duration);
 }
 
 static int
@@ -598,7 +596,8 @@ vl_method_quit (sd_varlink *link, sd_json_variant *parameters,
     {
       log_msg (LOG_ERR, "Quit request: disabling event loop failed: %s",
 	       strerror (-r));
-      return r;
+      return sd_varlink_errorbo(link, "org.openSUSE.rebootmgr.InternalError",
+				SD_JSON_BUILD_PAIR_BOOLEAN("Success", false));
     }
 
   ctx->timer = sd_event_source_unref (ctx->timer);
