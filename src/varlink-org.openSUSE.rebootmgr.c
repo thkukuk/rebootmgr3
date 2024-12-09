@@ -85,4 +85,6 @@ SD_VARLINK_DEFINE_INTERFACE(
                 SD_VARLINK_SYMBOL_COMMENT("No Reboot was scheduled"),
                 &vl_error_NoRebootScheduled,
 		SD_VARLINK_SYMBOL_COMMENT("Writing new values in configuration file failed"),
-		&vl_error_ErrorWritingConfig);
+		&vl_error_ErrorWritingConfig,
+		SD_VARLINK_SYMBOL_COMMENT("Internal Error which should never happen"),
+		&vl_error_InternalError);
