@@ -398,12 +398,12 @@ static int
 get_full_status(struct status *p)
 {
   static const sd_json_dispatch_field dispatch_table[] = {
-    { "RebootStatus",              SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct status, status),                SD_JSON_MANDATORY },
-    { "RequestedMethod",           SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct status, method),                0                 },
-    { "RebootTime",                SD_JSON_VARIANT_STRING,  sd_json_dispatch_string, offsetof(struct status, reboot_time),        0                 },
-    { "RebootStrategy",            SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct status, strategy),              SD_JSON_MANDATORY },
-    { "MaintenanceWindowStart",    SD_JSON_VARIANT_STRING,  sd_json_dispatch_string, offsetof(struct status, maint_window_start), SD_JSON_MANDATORY },
-    { "MaintenanceWindowDuration", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, offsetof(struct status, maint_window_duration), SD_JSON_MANDATORY },
+    { "RebootStatus",              SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int,    offsetof(struct status, status),                SD_JSON_MANDATORY },
+    { "RequestedMethod",           SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int,    offsetof(struct status, method),                0                 },
+    { "RebootTime",                SD_JSON_VARIANT_STRING,  sd_json_dispatch_string, offsetof(struct status, reboot_time),           0                 },
+    { "RebootStrategy",            SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int,    offsetof(struct status, strategy),              SD_JSON_MANDATORY },
+    { "MaintenanceWindowStart",    SD_JSON_VARIANT_STRING,  sd_json_dispatch_string, offsetof(struct status, maint_window_start),    SD_JSON_MANDATORY },
+    { "MaintenanceWindowDuration", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int64,  offsetof(struct status, maint_window_duration), SD_JSON_MANDATORY },
     {}
   };
   _cleanup_(sd_varlink_unrefp) sd_varlink *link = NULL;
