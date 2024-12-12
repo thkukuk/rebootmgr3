@@ -661,6 +661,13 @@ run_varlink (RM_CTX *ctx)
       return r;
     }
 
+  r = sd_varlink_server_set_info(varlink_server, "openSUSE",
+				 PACKAGE" (rebootmgrd)",
+				 VERSION,
+				 "https://github.com/thkukuk/rebootmgr3");
+  if (r < 0)
+    return r;
+
   r = sd_varlink_server_set_description (varlink_server, "Rebootmgr");
   if (r < 0)
     {
