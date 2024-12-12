@@ -620,29 +620,31 @@ announce_ready (void)
 
 
 static int
-varlink_server_loop (sd_varlink_server *server, RM_CTX *ctx)
+varlink_server_loop(sd_varlink_server *server, RM_CTX *ctx)
 {
   int r;
 
   /* Runs a sd_varlink service event loop populated with a passed fd. */
 
-  r = sd_event_new (&(ctx->loop));
+  r = sd_event_new(&(ctx->loop));
   if (r < 0)
     return r;
 
-  r = sd_varlink_server_set_exit_on_idle (server, false);
+  r = sd_varlink_server_set_exit_on_idle(server, false);
   if (r < 0)
     return r;
 
-  r = sd_varlink_server_attach_event (server, ctx->loop, 0);
+  r = sd_varlink_server_attach_event(server, ctx->loop, 0);
   if (r < 0)
     return r;
 
-  r = sd_varlink_server_listen_auto (server);
+  r = sd_varlink_server_listen_auto(server);
   if (r < 0)
     return r;
 
-  return sd_event_loop (ctx->loop);
+  announce_ready();
+
+  return sd_event_loop(ctx->loop);
 }
 
 static int
@@ -705,8 +707,6 @@ run_varlink (RM_CTX *ctx)
       log_msg (LOG_ERR, "Failed to bind to Varlink socket: %s", strerror (-r));
       return r;
     }
-
-  announce_ready ();
 
   r = varlink_server_loop (varlink_server, ctx);
   if (r < 0)
