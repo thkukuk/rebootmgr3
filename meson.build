@@ -91,6 +91,7 @@ executable('rebootmgrd',
 subdir('etc')
 subdir('systemd')
 subdir('man')
+subdir('shell-completion/bash')
 
 # Unit tests
 subdir('tests')
