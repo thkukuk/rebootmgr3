@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: GPL-2.0-or-later
 
-/* Copyright (c) 2024 Thorsten Kukuk
+/* Copyright (c) 2024, 2025 Thorsten Kukuk
    Author: Thorsten Kukuk <kukuk@suse.com>
 
    This program is free software; you can redistribute it and/or modify
@@ -32,6 +32,119 @@
 #include "varlink-org.openSUSE.rebootmgr.h"
 
 static int verbose_flag = 0;
+
+static int
+vl_method_ping(sd_varlink *link, sd_json_variant *parameters,
+               sd_varlink_method_flags_t _unused_(flags),
+               void _unused_(*userdata))
+{
+  int r;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "Varlink method \"Ping\" called...");
+
+  r = sd_varlink_dispatch(link, parameters, NULL, NULL);
+  if (r != 0)
+    return r;
+
+  return sd_varlink_replybo(link, SD_JSON_BUILD_PAIR_BOOLEAN("Alive", true));
+}
+
+static int
+vl_method_set_log_level(sd_varlink *link, sd_json_variant *parameters,
+                        sd_varlink_method_flags_t _unused_(flags),
+                        void _unused_(*userdata))
+{
+  static const sd_json_dispatch_field dispatch_table[] = {
+    { "Level", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_int, 0, SD_JSON_MANDATORY },
+    {}
+  };
+
+  int r, level;
+
+  if (verbose_flag)
+    log_msg(LOG_INFO, "Varlink method \"SetLogLevel\" called...");
+
+  r = sd_varlink_dispatch(link, parameters, dispatch_table, &level);
+  if (r != 0)
+    return r;
+
+  if (debug_flag)
+    log_msg(LOG_DEBUG, "Log level %i requested", level);
+
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "SetLogLevel: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
+  if (level >= LOG_DEBUG)
+    debug_flag = 1;
+  else
+    debug_flag = 0;
+
+  if (level >= LOG_INFO)
+    verbose_flag = 1;
+  else
+    verbose_flag = 0;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "New log settings: debug=%i, verbose=%i", debug_flag, verbose_flag);
+
+  return sd_varlink_reply(link, NULL);
+}
+
+static int
+vl_method_get_environment(sd_varlink *link, sd_json_variant *parameters,
+                          sd_varlink_method_flags_t _unused_(flags),
+                          void _unused_(*userdata))
+{
+  int r;
+
+  if (verbose_flag)
+    log_msg (LOG_INFO, "Varlink method \"GetEnvironment\" called...");
+
+  r = sd_varlink_dispatch(link, parameters, NULL, NULL);
+  if (r != 0)
+    return r;
+
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "GetEnvironment: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
+#if 0 /* XXX */
+  for (char **e = environ; *e != 0; e++)
+    {
+      if (!env_assignment_is_valid(*e))
+        goto invalid;
+      if (!utf8_is_valid(*e))
+        goto invalid;
+    }
+#endif
+
+  return sd_varlink_replybo(link, SD_JSON_BUILD_PAIR_STRV("Environment", environ));
+
+#if 0
+ invalid:
+  return sd_varlink_error(link, "io.systemd.service.InconsistentEnvironment", parameters);
+#endif
+}
 
 static int
 vl_method_status (sd_varlink *link, sd_json_variant *parameters,
@@ -169,7 +282,7 @@ calc_reboot_time (RM_CTX *ctx, usec_t *ret)
       char buf[FORMAT_TIMESTAMP_MAX];
       int64_t in_secs = (next - curr) / USEC_PER_SEC;
 
-      log_msg (LOG_INFO, "Reboot in %i seconds at %s", in_secs,
+      log_msg (LOG_NOTICE, "Reboot in %i seconds at %s", in_secs,
                format_timestamp(buf, sizeof(buf), next));
     }
 
@@ -317,6 +430,19 @@ vl_method_reboot(sd_varlink *link, sd_json_variant *parameters,
       log_msg(LOG_DEBUG, "Reboot request: %s (%i), force: %s", str, p.reboot_method, bool_to_str (p.force));
     }
 
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "Reboot: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
   if (p.reboot_method != RM_REBOOTMETHOD_HARD &&
       p.reboot_method != RM_REBOOTMETHOD_SOFT)
     return sd_varlink_error_invalid_parameter_name(link, "reboot");
@@ -359,26 +485,6 @@ vl_method_reboot(sd_varlink *link, sd_json_variant *parameters,
   return sd_varlink_replybo(link,
 			    SD_JSON_BUILD_PAIR_INTEGER("Method", ctx->reboot_method),
 			    SD_JSON_BUILD_PAIR_STRING("Scheduled", format_timestamp (time_str, sizeof (time_str), ctx->reboot_time)));
-
-#if 0
-  Context *c = ASSERT_PTR(userdata);
-  bool privileged;
-
-  r = varlink_verify_polkit_async_full(
-				       link,
-				       c->bus,
-				       "org.freedesktop.hostname1.get-hardware-serial",
-				       /* details= */ NULL,
-				       UID_INVALID,
-				       POLKIT_DONT_REPLY,
-				       &c->polkit_registry);
-  if (r == 0)
-    return 0; /* No authorization for now, but the async polkit stuff will call us again when it has it */
-
-  /* We ignore all authentication errors here, since most data is unprivileged, the one exception being
-   * the product ID which we'll check explicitly. */
-  privileged = r > 0;
-#endif
 }
 
 static int
@@ -406,6 +512,19 @@ vl_method_set_strategy (sd_varlink *link, sd_json_variant *parameters,
     {
       log_msg (LOG_ERR, "Set strategy request: varlik dispatch failed: %s", strerror (-r));
       return r;
+    }
+
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "SetStrategy: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
     }
 
   if (p.strategy > RM_REBOOTSTRATEGY_UNKNOWN &&
@@ -481,6 +600,19 @@ vl_method_set_window (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "SetWindow: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
   CalendarSpec *new_start = NULL;
   if (p.start == NULL || strlen (p.start) == 0 ||
       calendar_spec_from_string (p.start, &new_start) < 0)
@@ -549,6 +681,19 @@ vl_method_cancel (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "Cancel: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
   if (ctx->reboot_status == RM_REBOOTSTATUS_NOT_REQUESTED)
     return sd_varlink_error (link, "org.openSUSE.rebootmgr.NoRebootScheduled", NULL);
 
@@ -591,6 +736,19 @@ vl_method_quit (sd_varlink *link, sd_json_variant *parameters,
       return r;
     }
 
+  uid_t peer_uid;
+  r = sd_varlink_get_peer_uid(link, &peer_uid);
+  if (r < 0)
+    {
+      log_msg(LOG_ERR, "Failed to get peer UID: %s", strerror(-r));
+      return r;
+    }
+  if (peer_uid != 0)
+    {
+      log_msg(LOG_WARNING, "Quit: peer UID %i denied", peer_uid);
+      return sd_varlink_error(link, SD_VARLINK_ERROR_PERMISSION_DENIED, parameters);
+    }
+
   r = sd_event_exit (ctx->loop, p.code);
   if (r != 0)
     {
@@ -615,9 +773,17 @@ announce_ready (void)
   int r = sd_notify (0, "READY=1\n"
 		     "STATUS=Processing requests...");
   if (r < 0)
-    log_msg (LOG_ERR, "sd_notify() failed: %s", strerror(-r));
+    log_msg (LOG_ERR, "sd_notify(READY) failed: %s", strerror(-r));
 }
 
+static void
+announce_stopping (void)
+{
+  int r = sd_notify (0, "STOPPING=1\n"
+                     "STATUS=Shutting down...");
+  if (r < 0)
+    log_msg (LOG_ERR, "sd_notify(STOPPING) failed: %s", strerror(-r));
+}
 
 static int
 varlink_server_loop(sd_varlink_server *server, RM_CTX *ctx)
@@ -634,7 +800,7 @@ varlink_server_loop(sd_varlink_server *server, RM_CTX *ctx)
   if (r < 0)
     return r;
 
-  r = sd_varlink_server_attach_event(server, ctx->loop, 0);
+  r = sd_varlink_server_attach_event(server, ctx->loop, SD_EVENT_PRIORITY_NORMAL);
   if (r < 0)
     return r;
 
@@ -643,8 +809,10 @@ varlink_server_loop(sd_varlink_server *server, RM_CTX *ctx)
     return r;
 
   announce_ready();
+  r = sd_event_loop (ctx->loop);
+  announce_stopping();
 
-  return sd_event_loop(ctx->loop);
+  return r;
 }
 
 static int
@@ -653,7 +821,7 @@ run_varlink (RM_CTX *ctx)
   int r;
   _cleanup_(sd_varlink_server_unrefp) sd_varlink_server *varlink_server = NULL;
 
-  r = sd_varlink_server_new (&varlink_server, (debug_flag?0:SD_VARLINK_SERVER_ROOT_ONLY)|SD_VARLINK_SERVER_INHERIT_USERDATA);
+  r = sd_varlink_server_new (&varlink_server, SD_VARLINK_SERVER_ACCOUNT_UID|SD_VARLINK_SERVER_INHERIT_USERDATA);
   if (r < 0)
     {
       log_msg (LOG_ERR, "Failed to allocate varlink server: %s",
@@ -686,14 +854,17 @@ run_varlink (RM_CTX *ctx)
       return r;
     }
 
-  r = sd_varlink_server_bind_method_many (varlink_server,
-					  "org.openSUSE.rebootmgr.Reboot",      vl_method_reboot,
-					  "org.openSUSE.rebootmgr.Cancel",      vl_method_cancel,
-					  "org.openSUSE.rebootmgr.Quit",        vl_method_quit,
-					  "org.openSUSE.rebootmgr.SetStrategy", vl_method_set_strategy,
-					  "org.openSUSE.rebootmgr.SetWindow",   vl_method_set_window,
-					  "org.openSUSE.rebootmgr.Status",      vl_method_status,
-					  "org.openSUSE.rebootmgr.FullStatus",  vl_method_fullstatus);
+  r = sd_varlink_server_bind_method_many(varlink_server,
+					 "org.openSUSE.rebootmgr.Cancel",         vl_method_cancel,
+					 "org.openSUSE.rebootmgr.FullStatus",     vl_method_fullstatus,
+					 "org.openSUSE.rebootmgr.GetEnvironment", vl_method_get_environment,
+					 "org.openSUSE.rebootmgr.Ping",           vl_method_ping,
+					 "org.openSUSE.rebootmgr.Quit",           vl_method_quit,
+					 "org.openSUSE.rebootmgr.Reboot",         vl_method_reboot,
+					 "org.openSUSE.rebootmgr.SetLogLevel",    vl_method_set_log_level,
+					 "org.openSUSE.rebootmgr.SetStrategy",    vl_method_set_strategy,
+					 "org.openSUSE.rebootmgr.SetWindow",      vl_method_set_window,
+					 "org.openSUSE.rebootmgr.Status",         vl_method_status);
   if (r < 0)
     {
       log_msg(LOG_ERR, "Failed to bind Varlink methods: %s",
@@ -711,15 +882,15 @@ run_varlink (RM_CTX *ctx)
   r = sd_varlink_server_listen_address(varlink_server, RM_VARLINK_SOCKET, 0666);
   if (r < 0)
     {
-      log_msg (LOG_ERR, "Failed to bind to Varlink socket: %s", strerror (-r));
+      log_msg(LOG_ERR, "Failed to bind to Varlink socket: %s", strerror (-r));
       return r;
     }
 
-  r = varlink_server_loop (varlink_server, ctx);
+  r = varlink_server_loop(varlink_server, ctx);
   if (r < 0)
     {
-      log_msg (LOG_ERR, "Failed to run Varlink event loop: %s",
-	       strerror (-r));
+      log_msg(LOG_ERR, "Failed to run Varlink event loop: %s",
+	      strerror(-r));
       return r;
     }
 
@@ -749,7 +920,7 @@ create_context (RM_CTX **ctx)
 		   RM_REBOOTSTRATEGY_BEST_EFFORT,
 		   NULL, 3600, 0,
 		   NULL, NULL, 0};
-  calendar_spec_from_string ("03:30", &(*ctx)->maint_window_start);
+  calendar_spec_from_string("03:30", &(*ctx)->maint_window_start);
 
   return 0;
 }
